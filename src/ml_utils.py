@@ -46,7 +46,7 @@ class EyeAI():
 
         return [fk.columns[0].name for fk in table.foreign_keys
                 if len(fk.columns) == 1 and is_vocab(fk.pk_table)]
-
+0
     @property
     def image(self) -> datapath._TableWrapper:
         return self.eye_ai.Image
