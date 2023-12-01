@@ -21,7 +21,7 @@ class EyeAI():
     - __init__(self, protocol: str, hostname: str, catalog_number: str): Initializes the HelperRoutines object.
     - create_new_vocab(self, schema_name: str, table_name: str, name: str, description: str, synonyms: List[str] = [], exist_ok: bool = False) -> str: Creates a new tag in the catalog.
     """
-    def __init__(self, hostname: str = 'eye-ai.org', catalog_number: str = 'eye-ai'):
+    def __init__(self, hostname: str = 'www.eye-ai.org', catalog_number: str = 'eye-ai'):
         """
         Initializes the HelperRoutines object.
 
