@@ -1,6 +1,9 @@
 import deriva.core.utils.globus_auth_utils
 from deriva.core import ErmrestCatalog, HatracStore, AttrDict, get_credential
+import deriva.core.ermrest_model as ermrest_model
 import deriva.core.datapath as datapath
+import pandas as pd
+
 from typing import List
 import logging
 from deriva.core import init_logging
@@ -36,6 +39,15 @@ class EyeAI():
         self.pb = self.catalog.getPathBuilder()
         self.eye_ai = self.pb.schemas['eye-ai']
 
+    def _vocab_columns(self, table: ermrest_model.Table):
+        vocab_columns = {'Name', 'URI', 'Synonyms', 'Description', 'ID'}
+        def is_vocab(table: ermrest_model.Table):
+            return vocab_columns.issubset({c.name for c in table.columns})
+
+        return [fk.columns[0].name for fk in table.foreign_keys
+                if len(fk.columns) == 1 and is_vocab(fk.pk_table)]
+0
     @property
     def image(self) -> datapath._TableWrapper:
         return self.eye_ai.Image
+
