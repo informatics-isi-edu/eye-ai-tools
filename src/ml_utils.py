@@ -189,8 +189,7 @@ class EyeAI():
         return result.to_dict(orient='records')
     
     def _batchInsert(self, table: datapath._TableWrapper, entities: Iterator[dict]):
-        it = iter(entities)
-        while (chunk := list(islice(it, 5000))):
+        while (chunk := list(islice(iter(entities), 5000))):
             table.insert(chunk)
 
 
