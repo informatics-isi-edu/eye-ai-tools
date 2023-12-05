@@ -179,7 +179,7 @@ class EyeAI:
         :return:
         """
         entities = self.eye_ai.Process.insert([{'Github_URL': github_url,
-                                                'Metadata': process_name,
+                                                'Name': process_name,
                                                 'Process_Tag': process_tag,
                                                 'Description': description,
                                                 'Github_Checksum': github_checksum}])
