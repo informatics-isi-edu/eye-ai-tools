@@ -167,7 +167,7 @@ class EyeAI:
                                           defaults={'ID', 'URI'})
             return entities[0]['RID']
 
-    def insert_new_process(self, metadata: str, github_url: str = "", process_tag: str = "", description: str = "",
+    def insert_new_process(self, process_name: str, github_url: str = "", process_tag: str = "", description: str = "",
                            github_checksum: str = ""):
         """
 
@@ -179,7 +179,7 @@ class EyeAI:
         :return:
         """
         entities = self.eye_ai.Process.insert([{'Github_URL': github_url,
-                                                'Metadata': metadata,
+                                                'Metadata': process_name,
                                                 'Process_Tag': process_tag,
                                                 'Description': description,
                                                 'Github_Checksum': github_checksum}])
