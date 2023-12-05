@@ -195,9 +195,9 @@ class EyeAI:
 
         Args:
         - df (DataFrame): Input DataFrame containing relevant columns.
-        - Diag_func (Callable): Function to compute Diagnosis.
-        - CDR_func (Callable): Function to compute Cup/Disk Ratio.
-        - ImageQuality_func (Callable): Function to compute Image Quality.
+        - diag_func (Callable): Function to compute Diagnosis.
+        - cdr_func (Callable): Function to compute Cup/Disk Ratio.
+        - image_quality_func (Callable): Function to compute Image Quality.
 
         Returns:
         - List[Dict[str, Union[str, float]]]: List of dictionaries representing the generated Diagnosis.
