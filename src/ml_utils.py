@@ -211,7 +211,8 @@ class EyeAI:
 
     @staticmethod
     def _batch_insert(table: datapath._TableWrapper, entities: Sequence[dict[str, str]]):
-        while (chunk := list(islice(iter(entities), 5000))):
+        it = iter(entities)
+        while chunk := list(islice(it, 5000)):
             table.insert(chunk)
 
     def insert_new_diagnosis(self, entities: List[dict[str, dict]],
