@@ -186,7 +186,7 @@ class EyeAI:
         return entities[0]['RID']
 
     @staticmethod
-    def compute_diagnosis(self, df: pd.dataFrame,
+    def compute_diagnosis(self, df: pd.DataFrame,
                           diag_func: Callable,
                           cdr_func: Callable,
                           imageQuality_func: Callable) -> List[dict]:
