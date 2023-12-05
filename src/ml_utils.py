@@ -204,12 +204,6 @@ class EyeAI:
         - List[Dict[str, Union[str, float]]]: List of dictionaries representing the generated Diagnosis.
         """
 
-        # # Handle NaN and infinite values
-        # df.replace([np.inf, -np.inf], np.nan, inplace=True)
-
-        # # Round float values in the DataFrame
-        # df = df.round({'Cup/Disk_Ratio': 3})
-
         result = df.groupby("Image").agg({"Cup/Disk_Ratio": cdr_func,
                                           "Diagnosis": diag_func,
                                           "Image_Quality": image_quality_func})
