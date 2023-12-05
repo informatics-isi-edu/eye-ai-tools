@@ -4,9 +4,12 @@ import deriva.core.ermrest_model as ermrest_model
 import deriva.core.datapath as datapath
 import pandas as pd
 
-from typing import List
-import logging
-from deriva.core import init_logging
+from itertools import islice
+from typing import List, Iterator, Callable
+
+class EyeAIException(Exception):
+    def __init__(self, msg = ""):
+        self._msg = msg
 
 class EyeAI():
     """
@@ -123,7 +126,7 @@ class EyeAI():
         return image_frame[['Subject_RID', 'Diagnosis_RID', 'Full_Name', 'Image', 'Image_Side', 'Diagnosis', 'Cup/Disk_Ratio', 'Image_Quality']]
     
 
-    def create_new_vocab(self, table_name: str, name: str, description: str, synonyms: List[str] = [], exist_ok: bool = False):
+    def insert_new_tag(self, table_name: str, name: str, description: str, synonyms: List[str] = [], exist_ok: bool = False):
         """
         Creates a new control vocabulary in the control vocabulary table.
 
@@ -141,69 +144,57 @@ class EyeAI():
         Raises:
         - Exception: If the control vocabulary name already exists and exist_ok is False.
         """
-
-        init_logging()
-        # Load all the vocab names
         try:
             vocab_table = self.pb.schemas['eye-ai'].tables[table_name]
-        except:
-            print("The schema or table doesn't exist.")
-            return
+        except KeyError:
+            raise EyeAIException(f"The schema or table doesn't exist.")
         entities = vocab_table.path.entities()
 
         Name_list = [e['Name'] for e in entities]
-            
-        # Check if vocab name existed
-        if exist_ok == False:
-            if name in Name_list:
-                idx = Name_list.index(name)
-                logging.info(name + "existed")
-                return entities[idx]['RID']
-            else:
-                logging.info("New vocab created")
-                new_entity = {'Name': name, 'Description':description, 'Synonyms':synonyms}
-                entities = vocab_table.insert([new_entity], defaults={'ID', 'URI'})
-                return entities[0]['RID']
+        
+        if not exist_ok and name in Name_list:
+            idx = Name_list.index(name)
+            raise EyeAIException(f"{name} existed with RID {entities[idx]['RID']}")
+        elif exist_ok and name in Name_list:
+            raise EyeAIException("The control vocab already existed.")
         else:
-            if name in Name_list:
-                logging.info("The control vocab already existed.")
-            else:
-                logging.info("New vocab created")
-                new_entity = {'Name': name, 'Description':description, 'Synonyms':synonyms}
-                entities = vocab_table.insert([new_entity], defaults={'ID', 'URI'})
-                return entities[0]['RID']
+            entities = vocab_table.insert([{'Name': name, 'Description': description, 'Synonyms': synonyms}], defaults={'ID', 'URI'})
+            return entities[0]['RID']
 
     def insert_new_process(self, Metadata:str, Github_URL:str="", Process_Tag:str="", Description:str="", Github_Checksum:str=""):
-        process_records = [{'Github_URL':Github_URL,
-                            'Metadata':Metadata,
-                            'Process_Tag': Process_Tag,
-                            'Description': Description,
-                            'Github_Checksum':Github_Checksum}]
-        response = self.catalog.post("/entity/eye-ai:Process", json=process_records)
-        response.raise_for_status()
-        return response.json()[0]['RID']
+        entities = self.eye_ai.Process.insert([{'Github_URL':Github_URL,
+                                                'Metadata':Metadata,
+                                                'Process_Tag': Process_Tag,
+                                                'Description': Description,
+                                                'Github_Checksum':Github_Checksum}])
+        return entities[0]['RID']
     
-    def generate_Diagnosis(self, df, Diag_rule, CDR_rule, ImageQuality_rule):
-        result = df.groupby("Image").agg({"Cup/Disk_Ratio":CDR_rule,
-                                        "Diagnosis": Diag_rule,
-                                        "Image_Quality": ImageQuality_rule})
+    def generate_Diagnosis(self, df: pd.DataFrame, Diag_func: Callable, CDR_func: Callable, ImageQuality_func: Callable) -> List[dict]:
+        """
+        Generate Diagnosis based on provided functions.
+
+        Args:
+        - df (DataFrame): Input DataFrame containing relevant columns.
+        - Diag_func (Callable): Function to compute Diagnosis.
+        - CDR_func (Callable): Function to compute Cup/Disk Ratio.
+        - ImageQuality_func (Callable): Function to compute Image Quality.
+
+        Returns:
+        - List[Dict[str, Union[str, float]]]: List of dictionaries representing the generated Diagnosis.
+        """
+        result = df.groupby("Image").agg({"Cup/Disk_Ratio":CDR_func,
+                                        "Diagnosis": Diag_func,
+                                        "Image_Quality": ImageQuality_func})
         result.reset_index('Image', inplace=True)
         return result.to_dict(orient='records')
     
-    def _batchInsert(self, table, entities: List[str]):
-        n = len(entities)
-        batch_num = min(n//5, 5000)
-        for i in range(n//batch_num):
-            table.insert(entities[i*batch_num: (i+1)*batch_num])
-            print(i*batch_num, (i+1)*batch_num)
-        if (i+1)*batch_num < n:
-            table.insert(entities[(i+1)*batch_num: n])
-            print((i+1)*batch_num, n)
+    def _batchInsert(self, table: datapath._TableWrapper, entities: Iterator[dict]):
+        it = iter(entities)
+        while (chunk := list(islice(it, 5000))):
+            table.insert(chunk)
 
-    def insert_new_diag(self, entities, diagTag_RID, Process_RID):
-        n = len(entities)
-        for e in entities:
-            e["Process"] = Process_RID
-            e["Diagnosis_Tag"] = diagTag_RID
-        self._batchInsert(self.eye_ai.Diagnosis, entities)
-        return entities
+
+    def insert_new_diag(self, entities: List[dict], diagTag_RID: str, Process_RID: str):
+        self._batchInsert(self.eye_ai.Diagnosis,
+                          [{'Process': Process_RID, 'Diagnosis_Tag': diagTag_RID, **e}
+                           for e in entities])
