@@ -5,7 +5,7 @@ import pandas as pd
 
 from itertools import islice
 from typing import List, Sequence, Callable
-
+import numpy as np
 
 class EyeAIException(Exception):
     def __init__(self, msg=""):
@@ -203,9 +203,18 @@ class EyeAI:
         Returns:
         - List[Dict[str, Union[str, float]]]: List of dictionaries representing the generated Diagnosis.
         """
+
+        # # Handle NaN and infinite values
+        # df.replace([np.inf, -np.inf], np.nan, inplace=True)
+
+        # # Round float values in the DataFrame
+        # df = df.round({'Cup/Disk_Ratio': 3})
+
         result = df.groupby("Image").agg({"Cup/Disk_Ratio": cdr_func,
                                           "Diagnosis": diag_func,
                                           "Image_Quality": image_quality_func})
+        result = result.round({'Cup/Disk_Ratio': 4})
+        result = result.fillna('NaN')
         result.reset_index('Image', inplace=True)
 
         ImageQuality_map = {e["Name"]: e["RID"] for e in self.eye_ai.Image_Quality_Vocab.entities()}
@@ -219,7 +228,7 @@ class EyeAI:
     @staticmethod
     def _batch_insert(table: datapath._TableWrapper, entities: Sequence[dict[str, str]]):
         it = iter(entities)
-        while chunk := list(islice(it, 5000)):
+        while chunk := list(islice(it, 2000)):
             table.insert(chunk)
 
     def insert_new_diagnosis(self, entities: List[dict[str, dict]],
