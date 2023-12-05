@@ -127,7 +127,7 @@ class EyeAI:
             ['Subject_RID', 'Diagnosis_RID', 'Full_Name', 'Image', 'Image_Side', 'Diagnosis', 'Cup/Disk_Ratio',
              'Image_Quality']]
 
-    def insert_new_term(self, table_name: str,
+    def add_term(self, table_name: str,
                         name: str,
                         description: str,
                         synonyms: List[str] = [],
@@ -167,7 +167,7 @@ class EyeAI:
                                           defaults={'ID', 'URI'})
             return entities[0]['RID']
 
-    def insert_new_process(self, process_name: str, github_url: str = "", process_tag: str = "", description: str = "",
+    def add_process(self, process_name: str, github_url: str = "", process_tag: str = "", description: str = "",
                            github_checksum: str = ""):
         """
 
