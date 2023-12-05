@@ -186,8 +186,8 @@ class EyeAI:
                                                 'Github_Checksum': github_checksum}])
         return entities[0]['RID']
 
-    @staticmethod
-    def compute_diagnosis(df: pd.DataFrame,
+    def compute_diagnosis(self,
+                          df: pd.DataFrame,
                           diag_func: Callable,
                           cdr_func: Callable,
                           image_quality_func: Callable) -> List[dict]:
@@ -207,6 +207,13 @@ class EyeAI:
                                           "Diagnosis": diag_func,
                                           "Image_Quality": image_quality_func})
         result.reset_index('Image', inplace=True)
+
+        ImageQuality_map = {e["Name"]: e["RID"] for e in self.eye_ai.Image_Quality_Vocab.entities()}
+        Diagnosis_map = {e["Name"]: e["RID"] for e in self.eye_ai.Diagnosis_Image_Vocab.entities()}
+        result.replace({"Image_Quality": ImageQuality_map,
+                        "Diagnosis": Diagnosis_map}, inplace=True)
+        result.rename({'Image_Quality': 'Image_Quality_Vocab', 'Diagnosis': 'Diagnosis_Vocab'}, axis=1, inplace=True)
+
         return result.to_dict(orient='records')
 
     @staticmethod
