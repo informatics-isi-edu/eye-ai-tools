@@ -49,8 +49,8 @@ class EyeAI:
     def _vocab_columns(table: ermrest_model.Table):
         vocab_columns = {'Name', 'URI', 'Synonyms', 'Description', 'ID'}
 
-        def is_vocab(table: ermrest_model.Table):
-            return vocab_columns.issubset({c.name for c in table.columns})
+        def is_vocab(vocab: ermrest_model.Table):
+            return vocab_columns.issubset({c.name for c in vocab.columns})
 
         return [fk.columns[0].name for fk in table.foreign_keys
                 if len(fk.columns) == 1 and is_vocab(fk.pk_table)]
@@ -189,7 +189,7 @@ class EyeAI:
     def compute_diagnosis(df: pd.DataFrame,
                           diag_func: Callable,
                           cdr_func: Callable,
-                          imageQuality_func: Callable) -> List[dict]:
+                          image_quality_func: Callable) -> List[dict]:
         """
         Compute a new diagnosis based on provided functions.
 
@@ -204,7 +204,7 @@ class EyeAI:
         """
         result = df.groupby("Image").agg({"Cup/Disk_Ratio": cdr_func,
                                           "Diagnosis": diag_func,
-                                          "Image_Quality": imageQuality_func})
+                                          "Image_Quality": image_quality_func})
         result.reset_index('Image', inplace=True)
         return result.to_dict(orient='records')
 
@@ -216,5 +216,5 @@ class EyeAI:
     def insert_new_diagnosis(self, entities: List[dict[str, dict]],
                              diagTag_RID: str,
                              process_RID: str):
-        self._batch_insert(self.eye_ai.Diagnosis,
+        EyeAI._batch_insert(self.eye_ai.Diagnosis,
                            [{'Process': process_RID, 'Diagnosis_Tag': diagTag_RID, **e} for e in entities])
