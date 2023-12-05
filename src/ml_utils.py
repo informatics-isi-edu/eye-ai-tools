@@ -128,10 +128,10 @@ class EyeAI:
              'Image_Quality']]
 
     def add_term(self, table_name: str,
-                        name: str,
-                        description: str,
-                        synonyms: List[str] = [],
-                        exist_ok: bool = False):
+                 name: str,
+                 description: str,
+                 synonyms: List[str] = [],
+                 exist_ok: bool = False):
         """
         Creates a new control vocabulary in the control vocabulary table.
 
@@ -152,26 +152,27 @@ class EyeAI:
         try:
             vocab_table = self.pb.schemas['eye-ai'].tables[table_name]
         except KeyError:
-            raise EyeAIException(f"The schema or table doesn't exist.")
-        entities = vocab_table.path.entities()
+            raise EyeAIException(f"The schema or vocabulary table doesn't exist.")
 
-        name_list = [e['Name'] for e in entities]
-
-        if not exist_ok and name in name_list:
-            idx = name_list.index(name)
-            raise EyeAIException(f"{name} existed with RID {entities[idx]['RID']}")
-        elif exist_ok and name in name_list:
-            raise EyeAIException("The control vocab already existed.")
+        try:
+            entities = vocab_table.path.entities()
+            name_list = [e['Name'] for e in entities]
+            term_rid = entities[name_list.index(name)]['RID']
+        except ValueError:
+            # Name is not in list of current terms
+            term_rid = vocab_table.insert([{'Name': name, 'Description': description, 'Synonyms': synonyms}],
+                                          defaults={'ID', 'URI'})[0]['RID']
         else:
-            entities = vocab_table.insert([{'Name': name, 'Description': description, 'Synonyms': synonyms}],
-                                          defaults={'ID', 'URI'})
-            return entities[0]['RID']
+            # Name is list of current terms.
+            if not exist_ok:
+                raise EyeAIException(f"{name} existed with RID {entities[name_list.index(name)]['RID']}")
+        return term_rid
 
     def add_process(self, process_name: str, github_url: str = "", process_tag: str = "", description: str = "",
-                           github_checksum: str = ""):
+                    github_checksum: str = ""):
         """
 
-        :param metadata:
+        :param process_name:
         :param github_url:
         :param process_tag:
         :param description:
@@ -217,4 +218,4 @@ class EyeAI:
                              diagTag_RID: str,
                              process_RID: str):
         EyeAI._batch_insert(self.eye_ai.Diagnosis,
-                           [{'Process': process_RID, 'Diagnosis_Tag': diagTag_RID, **e} for e in entities])
+                            [{'Process': process_RID, 'Diagnosis_Tag': diagTag_RID, **e} for e in entities])
