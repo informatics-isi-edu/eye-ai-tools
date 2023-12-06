@@ -7,12 +7,108 @@ from itertools import islice
 from typing import List, Sequence, Callable
 import numpy as np
 
+
 class EyeAIException(Exception):
     def __init__(self, msg=""):
         self._msg = msg
 
 
-class EyeAI:
+class DerivaML:
+    def __init__(self, hostname: str, catalog_number: str, schema_name):
+        self.credential = get_credential(hostname)
+        self.catalog = ErmrestCatalog('https', hostname, catalog_number, self.credential)
+        self.model = self.catalog.getCatalogModel()
+        self.pb = self.catalog.getPathBuilder()
+        self.schema_name = schema_name
+        self.schema = self.pb.schemas[schema_name]
+
+    def is_vocabulary(self, table_name: str):
+        vocab_columns = {'Name', 'URI', 'Synonyms', 'Description', 'ID'}
+        try:
+            table = self.model.schemas[self.schema_name].tables[table_name]
+        except KeyError:
+            raise EyeAIException(f"The vocabulary table {table_name} doesn't exist.")
+        return vocab_columns.issubset({c.name for c in table.columns})
+
+    @staticmethod
+    def _vocab_columns(table: ermrest_model.Table):
+        return [fk.columns[0].name for fk in table.foreign_keys
+                if len(fk.columns) == 1 and DerivaML.is_vocab(fk.pk_table)]
+
+    def add_term(self, table_name: str,
+                 name: str,
+                 description: str,
+                 synonyms: List[str] = None,
+                 exist_ok: bool = False):
+        """
+        Creates a new control vocabulary in the control vocabulary table.
+
+        Args:
+        - table_name (str): The name of the control vocabulary table.
+        - name (str): The name of the new control vocabulary.
+        - description (str): The description of the new control vocabulary.
+        - synonyms (List[str]): Optional list of synonyms for the new control vocabulary. Defaults to an empty list.
+        - exist_ok (bool): Optional flag indicating whether to allow creation if the control vocabulary
+        name already exists. Defaults to False.
+
+        Returns:
+        - str: The RID (Record ID) of the newly created control vocabulary.
+
+        Raises:
+        - Exception: If the control vocabulary name already exists and exist_ok is False.
+        """
+        synonyms = synonyms or []
+
+        try:
+            if not self.is_vocabulary(table_name):
+                raise EyeAIException(f"The table {table_name} is not a controlled vocabulary")
+        except KeyError:
+            raise EyeAIException(f"The schema or vocabulary table {table_name} doesn't exist.")
+
+        try:
+            entities = self.schema.tables[table_name].entities()
+            name_list = [e['Name'] for e in entities]
+            term_rid = entities[name_list.index(name)]['RID']
+        except ValueError:
+            # Name is not in list of current terms
+            term_rid = self.schema.tables[table_name].insert([{'Name': name, 'Description': description, 'Synonyms': synonyms}],
+                                          defaults={'ID', 'URI'})[0]['RID']
+        else:
+            # Name is list of current terms.
+            if not exist_ok:
+                raise EyeAIException(f"{name} existed with RID {entities[name_list.index(name)]['RID']}")
+        return term_rid
+
+    def lookup_term(self, table_name: str, term_name: str) -> str:
+        try:
+            vocab_table = self.is_vocabulary(table_name)
+        except KeyError:
+            raise EyeAIException(f"The schema or vocabulary table {table_name} doesn't exist.")
+
+        if not vocab_table:
+            raise EyeAIException(f"The table {table_name} is not a controlled vocabulary")
+
+        for term in self.schema.tables[table_name].entities():
+            if term_name == term['Name'] or (term['Synonyms'] and term_name in term['Synonyms']):
+                return term['RID']
+
+        raise EyeAIException(f"Term {term_name} is not in vocabuary {table_name}")
+
+    def list_vocabularies(self):
+        return [t for t in self.schema.tables if self.is_vocabulary(t)]
+
+    def list_vocabulary(self, table_name: str):
+        try:
+            vocab_table = self.is_vocabulary(table_name)
+        except KeyError:
+            raise EyeAIException(f"The schema or vocabulary table {table_name} doesn't exist.")
+
+        if not vocab_table:
+            raise EyeAIException(f"The table {table_name} is not a controlled vocabulary")
+
+        return pd.DataFrame(self.schema.tables[table_name].entities())
+
+class EyeAI(DerivaML):
     """
     CatalogHelper is a class that provides helper routines for manipulating a catalog using deriva-py.
 
@@ -39,21 +135,7 @@ class EyeAI:
         - catalog_number (str): The catalog number or name.
         """
 
-        self.credential = get_credential(hostname)
-        self.catalog = ErmrestCatalog('https', hostname, catalog_number, self.credential)
-        self.model = self.catalog.getCatalogModel()
-        self.pb = self.catalog.getPathBuilder()
-        self.eye_ai = self.pb.schemas['eye-ai']
-
-    @staticmethod
-    def _vocab_columns(table: ermrest_model.Table):
-        vocab_columns = {'Name', 'URI', 'Synonyms', 'Description', 'ID'}
-
-        def is_vocab(vocab: ermrest_model.Table):
-            return vocab_columns.issubset({c.name for c in vocab.columns})
-
-        return [fk.columns[0].name for fk in table.foreign_keys
-                if len(fk.columns) == 1 and is_vocab(fk.pk_table)]
+        super().__init__(hostname, catalog_number, 'eye-ai')
 
     @staticmethod
     def _find_latest_observation(df: pd.DataFrame):
@@ -126,47 +208,6 @@ class EyeAI:
         return image_frame[
             ['Subject_RID', 'Diagnosis_RID', 'Full_Name', 'Image', 'Image_Side', 'Diagnosis', 'Cup/Disk_Ratio',
              'Image_Quality']]
-
-    def add_term(self, table_name: str,
-                 name: str,
-                 description: str,
-                 synonyms: List[str] = [],
-                 exist_ok: bool = False):
-        """
-        Creates a new control vocabulary in the control vocabulary table.
-
-        Args:
-        - table_name (str): The name of the control vocabulary table.
-        - name (str): The name of the new control vocabulary.
-        - description (str): The description of the new control vocabulary.
-        - synonyms (List[str]): Optional list of synonyms for the new control vocabulary. Defaults to an empty list.
-        - exist_ok (bool): Optional flag indicating whether to allow creation if the control vocabulary
-        name already exists. Defaults to False.
-
-        Returns:
-        - str: The RID (Record ID) of the newly created control vocabulary.
-
-        Raises:
-        - Exception: If the control vocabulary name already exists and exist_ok is False.
-        """
-        try:
-            vocab_table = self.pb.schemas['eye-ai'].tables[table_name]
-        except KeyError:
-            raise EyeAIException(f"The schema or vocabulary table doesn't exist.")
-
-        try:
-            entities = vocab_table.path.entities()
-            name_list = [e['Name'] for e in entities]
-            term_rid = entities[name_list.index(name)]['RID']
-        except ValueError:
-            # Name is not in list of current terms
-            term_rid = vocab_table.insert([{'Name': name, 'Description': description, 'Synonyms': synonyms}],
-                                          defaults={'ID', 'URI'})[0]['RID']
-        else:
-            # Name is list of current terms.
-            if not exist_ok:
-                raise EyeAIException(f"{name} existed with RID {entities[name_list.index(name)]['RID']}")
-        return term_rid
 
     def add_process(self, process_name: str, github_url: str = "", process_tag: str = "", description: str = "",
                     github_checksum: str = ""):
