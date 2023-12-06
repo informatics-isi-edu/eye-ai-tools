@@ -5,12 +5,17 @@ import pandas as pd
 
 from itertools import islice
 from typing import List, Sequence, Callable
-import numpy as np
 
 
-class EyeAIException(Exception):
+class DerivaMLException(Exception):
     def __init__(self, msg=""):
+        super().__init__(msg)
         self._msg = msg
+
+
+class EyeAIException(DerivaMLException):
+    def __init__(self, msg=""):
+        super().__init__(msg=msg)
 
 
 class DerivaML:
@@ -19,21 +24,31 @@ class DerivaML:
         self.catalog = ErmrestCatalog('https', hostname, catalog_number, self.credential)
         self.model = self.catalog.getCatalogModel()
         self.pb = self.catalog.getPathBuilder()
+        self.host_name = hostname
         self.schema_name = schema_name
         self.schema = self.pb.schemas[schema_name]
 
-    def is_vocabulary(self, table_name: str):
+    def is_vocabulary(self, table_name: str) -> bool:
+        """
+
+        :param table_name:
+        :return:
+        """
         vocab_columns = {'Name', 'URI', 'Synonyms', 'Description', 'ID'}
         try:
             table = self.model.schemas[self.schema_name].tables[table_name]
         except KeyError:
-            raise EyeAIException(f"The vocabulary table {table_name} doesn't exist.")
+            raise DerivaMLException(f"The vocabulary table {table_name} doesn't exist.")
         return vocab_columns.issubset({c.name for c in table.columns})
 
-    @staticmethod
-    def _vocab_columns(table: ermrest_model.Table):
+    def _vocab_columns(self, table: ermrest_model.Table):
+        """
+        Return the list of columns in the table that are vocabulary terms.
+        :param table:
+        :return:
+        """
         return [fk.columns[0].name for fk in table.foreign_keys
-                if len(fk.columns) == 1 and DerivaML.is_vocab(fk.pk_table)]
+                if len(fk.columns) == 1 and self.is_vocabulary(fk.pk_table)]
 
     def add_term(self, table_name: str,
                  name: str,
@@ -71,8 +86,9 @@ class DerivaML:
             term_rid = entities[name_list.index(name)]['RID']
         except ValueError:
             # Name is not in list of current terms
-            term_rid = self.schema.tables[table_name].insert([{'Name': name, 'Description': description, 'Synonyms': synonyms}],
-                                          defaults={'ID', 'URI'})[0]['RID']
+            term_rid = self.schema.tables[table_name].insert(
+                [{'Name': name, 'Description': description, 'Synonyms': synonyms}],
+                defaults={'ID', 'URI'})[0]['RID']
         else:
             # Name is list of current terms.
             if not exist_ok:
@@ -80,6 +96,12 @@ class DerivaML:
         return term_rid
 
     def lookup_term(self, table_name: str, term_name: str) -> str:
+        """
+        Given a term name, return the RID of the associated term (or synanum).
+        :param table_name:
+        :param term_name:
+        :return:
+        """
         try:
             vocab_table = self.is_vocabulary(table_name)
         except KeyError:
@@ -95,9 +117,18 @@ class DerivaML:
         raise EyeAIException(f"Term {term_name} is not in vocabuary {table_name}")
 
     def list_vocabularies(self):
+        """
+        Return a list of all of the controlled vocabularies in the schema.
+        :return:
+        """
         return [t for t in self.schema.tables if self.is_vocabulary(t)]
 
-    def list_vocabulary(self, table_name: str):
+    def list_vocabulary(self, table_name: str) -> pd.DataFrame:
+        """
+        Return the list of terms that are in a vocabulary table.
+        :param table_name:
+        :return:
+        """
         try:
             vocab_table = self.is_vocabulary(table_name)
         except KeyError:
@@ -107,6 +138,7 @@ class DerivaML:
             raise EyeAIException(f"The table {table_name} is not a controlled vocabulary")
 
         return pd.DataFrame(self.schema.tables[table_name].entities())
+
 
 class EyeAI(DerivaML):
     """
@@ -152,11 +184,11 @@ class EyeAI(DerivaML):
 
     def image_tall(self, dataset_rid: str, diagnosis_tag_rid: str):
         # Get references to tables to start path.
-        subject_dataset = self.eye_ai.Subject_Dataset
-        subject = self.eye_ai.Subject
-        image = self.eye_ai.Image
-        observation = self.eye_ai.Observation
-        diagnosis = self.eye_ai.Diagnosis
+        subject_dataset = self.schema.Subject_Dataset
+        subject = self.schema.Subject
+        image = self.schema.Image
+        observation = self.schema.Observation
+        diagnosis = self.schema.Diagnosis
         path = subject_dataset.path
 
         results = path.filter(subject_dataset.Dataset == dataset_rid) \
@@ -191,11 +223,11 @@ class EyeAI(DerivaML):
         image_frame = pd.merge(image_frame, user, how="left", left_on='RCB', right_on='ID')
 
         # Now flatten out Diagnosis_Vocab, Image_quality_Vocab, Image_Side_Vocab
-        diagnosis_vocab = pd.DataFrame(self.eye_ai.Diagnosis_Image_Vocab.entities().fetch())[['RID', "Name"]]
+        diagnosis_vocab = pd.DataFrame(self.schema.Diagnosis_Image_Vocab.entities().fetch())[['RID', "Name"]]
         diagnosis_vocab.columns = ['Diagnosis_Vocab', 'Diagnosis']
-        image_quality_vocab = pd.DataFrame(self.eye_ai.Image_Quality_Vocab.entities().fetch())[['RID', "Name"]]
+        image_quality_vocab = pd.DataFrame(self.schema.Image_Quality_Vocab.entities().fetch())[['RID', "Name"]]
         image_quality_vocab.columns = ['Image_Quality_Vocab', 'Image_Quality']
-        image_side_vocab = pd.DataFrame(self.eye_ai.Image_Side_Vocab.entities().fetch())[['RID', "Name"]]
+        image_side_vocab = pd.DataFrame(self.schema.Image_Side_Vocab.entities().fetch())[['RID', "Name"]]
         image_side_vocab.columns = ['Image_Side_Vocab', 'Image_Side']
 
         image_frame = pd.merge(image_frame, diagnosis_vocab, how="left", on='Diagnosis_Vocab')
@@ -210,7 +242,8 @@ class EyeAI(DerivaML):
              'Image_Quality']]
 
     def add_process(self, process_name: str, github_url: str = "", process_tag: str = "", description: str = "",
-                    github_checksum: str = ""):
+                    github_checksum: str = "",
+                    exists_ok: bool = False):
         """
 
         :param process_name:
@@ -218,9 +251,12 @@ class EyeAI(DerivaML):
         :param process_tag:
         :param description:
         :param github_checksum:
+        :param exists_ok:
         :return:
         """
-        entities = self.eye_ai.Process.insert([{'Github_URL': github_url,
+        # TODO Should check to make sure process doesn't already exist?
+
+        entities = self.schema.Process.insert([{'Github_URL': github_url,
                                                 'Name': process_name,
                                                 'Process_Tag': process_tag,
                                                 'Description': description,
@@ -252,10 +288,10 @@ class EyeAI(DerivaML):
         result = result.fillna('NaN')
         result.reset_index('Image', inplace=True)
 
-        ImageQuality_map = {e["Name"]: e["RID"] for e in self.eye_ai.Image_Quality_Vocab.entities()}
-        Diagnosis_map = {e["Name"]: e["RID"] for e in self.eye_ai.Diagnosis_Image_Vocab.entities()}
-        result.replace({"Image_Quality": ImageQuality_map,
-                        "Diagnosis": Diagnosis_map}, inplace=True)
+        image_quality_map = {e["Name"]: e["RID"] for e in self.schema.Image_Quality_Vocab.entities()}
+        diagnosis_map = {e["Name"]: e["RID"] for e in self.schema.Diagnosis_Image_Vocab.entities()}
+        result.replace({"Image_Quality": image_quality_map,
+                        "Diagnosis": diagnosis_map}, inplace=True)
         result.rename({'Image_Quality': 'Image_Quality_Vocab', 'Diagnosis': 'Diagnosis_Vocab'}, axis=1, inplace=True)
 
         return result.to_dict(orient='records')
@@ -268,6 +304,6 @@ class EyeAI(DerivaML):
 
     def insert_new_diagnosis(self, entities: List[dict[str, dict]],
                              diagTag_RID: str,
-                             process_RID: str):
-        EyeAI._batch_insert(self.eye_ai.Diagnosis,
-                            [{'Process': process_RID, 'Diagnosis_Tag': diagTag_RID, **e} for e in entities])
+                             process_rid: str):
+        EyeAI._batch_insert(self.schema.Diagnosis,
+                            [{'Process': process_rid, 'Diagnosis_Tag': diagTag_RID, **e} for e in entities])
