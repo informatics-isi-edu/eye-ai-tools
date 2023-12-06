@@ -280,7 +280,13 @@ class EyeAI(DerivaML):
         image_frame = self._find_latest_observation(image_frame)
 
         # Show grader name
-        image_frame = pd.merge(image_frame, self.user_list(), how="left", left_on='RCB', right_on='ID')
+        Grading_tags = ["2-35G0", "2-35RM", "2-4F74", "2-4F76"]
+        diag_tag_vocab = self.list_vocabulary('Diagnosis_Tag')[["RID", "Name"]]
+        if diagnosis_tag_rid in Grading_tags:
+            image_frame = pd.merge(image_frame, self.user_list(), how="left", left_on='RCB', right_on='ID')
+        else:
+            image_frame = image_frame.assign(Full_Name=diag_tag_vocab[diag_tag_vocab['RID'] == diagnosis_tag_rid]["Name"].item())
+        # image_frame = pd.merge(image_frame, self.user_list(), how="left", left_on='RCB', right_on='ID')
 
         # Now flatten out Diagnosis_Vocab, Image_quality_Vocab, Image_Side_Vocab
         diagnosis_vocab = self.list_vocabulary('Diagnosis_Image_Vocab')[["RID", "Name"]].rename(columns={"RID":'Diagnosis_Vocab', "Name":"Diagnosis"})
@@ -290,13 +296,6 @@ class EyeAI(DerivaML):
         image_frame = pd.merge(image_frame, diagnosis_vocab, how="left", on='Diagnosis_Vocab')
         image_frame = pd.merge(image_frame, image_quality_vocab, how="left", on='Image_Quality_Vocab')
         image_frame = pd.merge(image_frame, image_side_vocab, how="left", on='Image_Side_Vocab')
-
-        # if diagnosis_tag_rid == "C1T4":
-        #     image_frame['Full_Name'] = 'Initial Diagnosis'
-        Grading_tags = ["2-35G0", "2-35RM", "2-4F74", "2-4F76"]
-        diag_tag_vocab = self.list_vocabulary('Diagnosis_Tag')[["RID", "Name"]]
-        if diagnosis_tag_rid not in Grading_tags:
-            image_frame = image_frame.assign(Full_Name=diag_tag_vocab[diag_tag_vocab['RID'] == diagnosis_tag_rid]["Name"].item())
 
         return image_frame[
             ['Subject_RID', 'Diagnosis_RID', 'Full_Name', 'Image', 'Image_Side', 'Diagnosis', 'Cup/Disk_Ratio',
