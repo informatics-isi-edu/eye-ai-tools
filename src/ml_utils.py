@@ -291,8 +291,12 @@ class EyeAI(DerivaML):
         image_frame = pd.merge(image_frame, image_quality_vocab, how="left", on='Image_Quality_Vocab')
         image_frame = pd.merge(image_frame, image_side_vocab, how="left", on='Image_Side_Vocab')
 
-        if diagnosis_tag_rid == "C1T4":
-            image_frame['Full_Name'] = 'Initial Diagnosis'
+        # if diagnosis_tag_rid == "C1T4":
+        #     image_frame['Full_Name'] = 'Initial Diagnosis'
+        Grading_tags = ["2-35G0", "2-35RM", "2-4F74", "2-4F76"]
+        diag_tag_vocab = self.list_vocabulary('Diagnosis_Tag')[["RID", "Name"]]
+        if diagnosis_tag_rid not in Grading_tags:
+            image_frame = image_frame.assign(Full_Name=diag_tag_vocab[diag_tag_vocab['RID'] == diagnosis_tag_rid]["Name"].item())
 
         return image_frame[
             ['Subject_RID', 'Diagnosis_RID', 'Full_Name', 'Image', 'Image_Side', 'Diagnosis', 'Cup/Disk_Ratio',
