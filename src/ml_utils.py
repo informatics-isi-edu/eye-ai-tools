@@ -30,9 +30,14 @@ class DerivaML:
 
     def is_vocabulary(self, table_name: str) -> bool:
         """
+        Check if a given table is a controlled vocabulary table.
 
-        :param table_name:
-        :return:
+        Args:
+        - table_name (str): The name of the table.
+
+        Returns:
+        - bool: True if the table is a controlled vocabulary, False otherwise.
+
         """
         vocab_columns = {'Name', 'URI', 'Synonyms', 'Description', 'ID'}
         try:
@@ -43,9 +48,13 @@ class DerivaML:
 
     def _vocab_columns(self, table: ermrest_model.Table):
         """
-        Return the list of columns in the table that are vocabulary terms.
-        :param table:
-        :return:
+        Return the list of columns in the table that are control vocabulary terms.
+
+        Args:
+        - table (ermrest_model.Table): The table.
+
+        Returns:
+        - List[str]: List of column names that are control vocabulary terms.
         """
         return [fk.columns[0].name for fk in table.foreign_keys
                 if len(fk.columns) == 1 and self.is_vocabulary(fk.pk_table)]
@@ -56,21 +65,20 @@ class DerivaML:
                  synonyms: List[str] = None,
                  exist_ok: bool = False):
         """
-        Creates a new control vocabulary in the control vocabulary table.
+        Creates a new control vocabulary term in the control vocabulary table.
 
         Args:
         - table_name (str): The name of the control vocabulary table.
         - name (str): The name of the new control vocabulary.
         - description (str): The description of the new control vocabulary.
         - synonyms (List[str]): Optional list of synonyms for the new control vocabulary. Defaults to an empty list.
-        - exist_ok (bool): Optional flag indicating whether to allow creation if the control vocabulary
-        name already exists. Defaults to False.
+        - exist_ok (bool): Optional flag indicating whether to allow creation if the control vocabulary name already exists. Defaults to False.
 
         Returns:
-        - str: The RID (Record ID) of the newly created control vocabulary.
+        - str: The RID of the newly created control vocabulary.
 
         Raises:
-        - Exception: If the control vocabulary name already exists and exist_ok is False.
+        - EyeAIException: If the control vocabulary name already exists and exist_ok is False.
         """
         synonyms = synonyms or []
 
@@ -97,10 +105,18 @@ class DerivaML:
 
     def lookup_term(self, table_name: str, term_name: str) -> str:
         """
-        Given a term name, return the RID of the associated term (or synanum).
-        :param table_name:
-        :param term_name:
-        :return:
+        Given a term name, return the RID of the associated term (or synonym).
+
+        Args:
+        - table_name (str): The name of the controlled vocabulary table.
+        - term_name (str): The name of the term to look up.
+
+        Returns:
+        - str: The RID of the associated term or synonym.
+
+        Raises:
+        - EyeAIException: If the schema or vocabulary table doesn't exist, or if the term is not found in the vocabulary.
+
         """
         try:
             vocab_table = self.is_vocabulary(table_name)
@@ -118,16 +134,26 @@ class DerivaML:
 
     def list_vocabularies(self):
         """
-        Return a list of all of the controlled vocabularies in the schema.
-        :return:
+        Return a list of all of the controlled vocabulary tables in the schema.
+
+        Returns:
+         - List[str]: A list of table names representing controlled vocabulary tables in the schema.
+
         """
         return [t for t in self.schema.tables if self.is_vocabulary(t)]
 
     def list_vocabulary(self, table_name: str) -> pd.DataFrame:
         """
-        Return the list of terms that are in a vocabulary table.
-        :param table_name:
-        :return:
+        Return the dataframe of terms that are in a vocabulary table.
+
+        Args:
+        - table_name (str): The name of the controlled vocabulary table.
+
+        Returns:
+        - pd.DataFrame: A DataFrame containing the terms in the specified controlled vocabulary table.
+
+        Raises:
+        - EyeAIException: If the schema or vocabulary table doesn't exist, or if the table is not a controlled vocabulary.
         """
         try:
             vocab_table = self.is_vocabulary(table_name)
@@ -140,6 +166,9 @@ class DerivaML:
         return pd.DataFrame(self.schema.tables[table_name].entities().fetch())
 
     def user_list(self) -> pd.DataFrame:
+        """
+        Return a DataFrame containing user information.
+        """
         users = self.pb.schemas['public']
         path = users.ERMrest_Client.path
         return pd.DataFrame(path.entities().fetch())[['ID', 'Full_Name']]
@@ -147,7 +176,7 @@ class DerivaML:
 
 class EyeAI(DerivaML):
     """
-    CatalogHelper is a class that provides helper routines for manipulating a catalog using deriva-py.
+    EyeAI is a class that extends DerivaML and provides additional routines for working with eye-ai catalogs using deriva-py.
 
     Attributes:
     - protocol (str): The protocol used to connect to the catalog (e.g., "https").
@@ -158,14 +187,24 @@ class EyeAI(DerivaML):
     - pb (PathBuilder): The PathBuilder object for constructing URL paths.
 
     Methods:
-    - __init__(self, protocol: str, hostname: str, catalog_number: str): Initializes the HelperRoutines object.
+    - __init__(self, hostname: str = 'www.eye-ai.org', catalog_number: str = 'eye-ai'): Initializes the EyeAI object.
     - create_new_vocab(self, schema_name: str, table_name: str, name: str, description: str, synonyms: List[str] = [],
-            exist_ok: bool = False) -> str: Creates a new tag in the catalog.
+            exist_ok: bool = False) -> str: Creates a new controlled vocabulary in the catalog.
+    - image_tall(self, dataset_rid: str, diagnosis_tag_rid: str): Retrieves tall-format image data based on provided diagnosis tag filters.
+    - add_process(self, process_name: str, github_url: str = "", process_tag: str = "", description: str = "",
+                    github_checksum: str = "", exists_ok: bool = False) -> str: Adds a new process to the Process table.
+    - compute_diagnosis(self, df: pd.DataFrame, diag_func: Callable, cdr_func: Callable,
+                          image_quality_func: Callable) -> List[dict]: Computes new diagnosis based on provided functions.
+    - insert_new_diagnosis(self, entities: List[dict[str, dict]], diagTag_RID: str, process_rid: str): Batch inserts new diagnosis entities into the Diagnoisis table.
+
+    Private Methods:
+    - _find_latest_observation(df: pd.DataFrame): Finds the latest observations for each subject in the DataFrame.
+    - _batch_insert(table: datapath._TableWrapper, entities: Sequence[dict[str, str]]): Batch inserts entities into a table.
     """
 
     def __init__(self, hostname: str = 'www.eye-ai.org', catalog_number: str = 'eye-ai'):
         """
-        Initializes the HelperRoutines object.
+        Initializes the EyeAI object.
 
         Args:
         - hostname (str): The hostname of the server where the catalog is located.
@@ -176,6 +215,15 @@ class EyeAI(DerivaML):
 
     @staticmethod
     def _find_latest_observation(df: pd.DataFrame):
+        """
+        Filter a DataFrame to retain only the rows representing the latest encounters for each subject.
+
+        Args:
+        - df (pd.DataFrame): Input DataFrame containing columns 'Subject_RID' and 'Date_of_Encounter'.
+
+        Returns:
+        - pd.DataFrame: DataFrame filtered to keep only the rows corresponding to the latest encounters for each subject.
+        """
         latest_encounters = {}
         for index, row in df.iterrows():
             subject_rid = row['Subject_RID']
@@ -188,6 +236,16 @@ class EyeAI(DerivaML):
         return df
 
     def image_tall(self, dataset_rid: str, diagnosis_tag_rid: str):
+        """
+        Retrieve tall-format image data based on provided dataset and diagnosis tag filters.
+
+        Args:
+        - dataset_rid (str): RID of the dataset to filter images.
+        - diagnosis_tag_rid (str): RID of the diagnosis tag used for further filtering.
+
+        Returns:
+        - pd.DataFrame: DataFrame containing tall-format image data from fist observation of the subject, based on the provided filters.
+        """
         # Get references to tables to start path.
         subject_dataset = self.schema.Subject_Dataset
         subject = self.schema.Subject
@@ -225,12 +283,9 @@ class EyeAI(DerivaML):
         image_frame = pd.merge(image_frame, self.user_list(), how="left", left_on='RCB', right_on='ID')
 
         # Now flatten out Diagnosis_Vocab, Image_quality_Vocab, Image_Side_Vocab
-        diagnosis_vocab = self.list_vocabulary('Diagnosis_Image_Vocab').columns = ['Diagnosis_Vocab', 'Diagnosis']
-        diagnosis_vocab.columns = ['Diagnosis_Vocab', 'Diagnosis']
-        image_quality_vocab = self.list_vocabulary('Image_Quality_Vocab')
-        image_quality_vocab.columns = ['Image_Quality_Vocab', 'Image_Quality']
-        image_side_vocab = self.list_vocabulary('Image_Side_Vocab')
-        image_side_vocab.columns = ['Image_Side_Vocab', 'Image_Side']
+        diagnosis_vocab = self.list_vocabulary('Diagnosis_Image_Vocab')[["RID", "Name"]].rename(columns={"RID":'Diagnosis_Vocab', "Name":"Diagnosis"})
+        image_quality_vocab = self.list_vocabulary('Image_Quality_Vocab')[["RID", "Name"]].rename(columns={"RID":'Image_Quality_Vocab', "Name":"Image_Quality"})
+        image_side_vocab = self.list_vocabulary('Image_Side_Vocab')[["RID", "Name"]].rename(columns={"RID":'Image_Side_Vocab', "Name":"Image_Side"})
 
         image_frame = pd.merge(image_frame, diagnosis_vocab, how="left", on='Diagnosis_Vocab')
         image_frame = pd.merge(image_frame, image_quality_vocab, how="left", on='Image_Quality_Vocab')
@@ -245,25 +300,41 @@ class EyeAI(DerivaML):
 
     def add_process(self, process_name: str, github_url: str = "", process_tag: str = "", description: str = "",
                     github_checksum: str = "",
-                    exists_ok: bool = False):
+                    exist_ok: bool = False):
+        """
+        Add a new process to the catalog.
+
+        Args:
+        - process_name (str): Name of the new process.
+        - github_url (str, optional): GitHub URL associated with the process.
+        - process_tag (str, optional): Tag for the process.
+        - description (str, optional): Description of the process.
+        - github_checksum (str, optional): Checksum of the GitHub repository.
+        - exists_ok (bool, optional):  Optional flag indicating whether to allow creation if the control vocabulary name already exists. Defaults to False.
+
+        Returns:
+        - str: RID (Record ID) of the newly created process.
+
+        Raises:
+        - Exception: If the process already exists and exists_ok is False.
         """
 
-        :param process_name:
-        :param github_url:
-        :param process_tag:
-        :param description:
-        :param github_checksum:
-        :param exists_ok:
-        :return:
-        """
-        # TODO Should check to make sure process doesn't already exist?
-
-        entities = self.schema.Process.insert([{'Github_URL': github_url,
+        try:
+            entities = self.schema.Process.entities()
+            name_list = [e['Name'] for e in entities]
+            term_rid = entities[name_list.index(process_name)]['RID']
+        except ValueError:
+            # Name is not in list of current terms
+            term_rid = self.schema.Process.insert([{'Github_URL': github_url,
                                                 'Name': process_name,
                                                 'Process_Tag': process_tag,
                                                 'Description': description,
-                                                'Github_Checksum': github_checksum}])
-        return entities[0]['RID']
+                                                'Github_Checksum': github_checksum}])[0]['RID']
+        else:
+            # Name is list of current terms.
+            if not exist_ok:
+                raise EyeAIException(f"{process_name} existed with RID {entities[name_list.index(process_name)]['RID']}")
+        return term_rid
 
     def compute_diagnosis(self,
                           df: pd.DataFrame,
@@ -280,7 +351,7 @@ class EyeAI(DerivaML):
         - image_quality_func (Callable): Function to compute Image Quality.
 
         Returns:
-        - List[Dict[str, Union[str, float]]]: List of dictionaries representing the generated Diagnosis.
+        - List[Dict[str, Union[str, float]]]: List of dictionaries representing the generated Diagnosis. The Cup/Disk_Ratio is always round to 4 decimal places.
         """
 
         result = df.groupby("Image").agg({"Cup/Disk_Ratio": cdr_func,
@@ -307,5 +378,13 @@ class EyeAI(DerivaML):
     def insert_new_diagnosis(self, entities: List[dict[str, dict]],
                              diagTag_RID: str,
                              process_rid: str):
+        """
+        Batch insert new diagnosis entities into the Diagnosis table.
+
+        Args:
+        - entities (List[dict[str, dict]]): List of diagnosis entities to be inserted.
+        - diagTag_RID (str): RID of the diagnosis tag associated with the new entities.
+        - process_rid (str): RID of the process associated with the new entities.
+        """
         EyeAI._batch_insert(self.schema.Diagnosis,
                             [{'Process': process_rid, 'Diagnosis_Tag': diagTag_RID, **e} for e in entities])
