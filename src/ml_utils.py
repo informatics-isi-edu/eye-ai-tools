@@ -137,7 +137,12 @@ class DerivaML:
         if not vocab_table:
             raise EyeAIException(f"The table {table_name} is not a controlled vocabulary")
 
-        return pd.DataFrame(self.schema.tables[table_name].entities())
+        return pd.DataFrame(self.schema.tables[table_name].entities().fetch())
+
+    def user_list(self) -> pd.DataFrame:
+        users = self.pb.schemas['public']
+        path = users.ERMrest_Client.path
+        return pd.DataFrame(path.entities().fetch())[['ID', 'Full_Name']]
 
 
 class EyeAI(DerivaML):
@@ -217,17 +222,14 @@ class EyeAI(DerivaML):
         image_frame = self._find_latest_observation(image_frame)
 
         # Show grader name
-        users = self.pb.schemas['public']
-        path = users.ERMrest_Client.path
-        user = pd.DataFrame(path.entities().fetch())[['ID', 'Full_Name']]
-        image_frame = pd.merge(image_frame, user, how="left", left_on='RCB', right_on='ID')
+        image_frame = pd.merge(image_frame, self.user_list(), how="left", left_on='RCB', right_on='ID')
 
         # Now flatten out Diagnosis_Vocab, Image_quality_Vocab, Image_Side_Vocab
-        diagnosis_vocab = pd.DataFrame(self.schema.Diagnosis_Image_Vocab.entities().fetch())[['RID', "Name"]]
+        diagnosis_vocab = self.list_vocabulary('Diagnosis_Image_Vocab').columns = ['Diagnosis_Vocab', 'Diagnosis']
         diagnosis_vocab.columns = ['Diagnosis_Vocab', 'Diagnosis']
-        image_quality_vocab = pd.DataFrame(self.schema.Image_Quality_Vocab.entities().fetch())[['RID', "Name"]]
+        image_quality_vocab = self.list_vocabulary('Image_Quality_Vocab')
         image_quality_vocab.columns = ['Image_Quality_Vocab', 'Image_Quality']
-        image_side_vocab = pd.DataFrame(self.schema.Image_Side_Vocab.entities().fetch())[['RID', "Name"]]
+        image_side_vocab = self.list_vocabulary('Image_Side_Vocab')
         image_side_vocab.columns = ['Image_Side_Vocab', 'Image_Side']
 
         image_frame = pd.merge(image_frame, diagnosis_vocab, how="left", on='Diagnosis_Vocab')
