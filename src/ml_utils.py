@@ -378,6 +378,12 @@ class EyeAI(DerivaML):
         while chunk := list(islice(it, 2000)):
             table.insert(chunk)
 
+    @staticmethod
+    def _batch_update(table: datapath._TableWrapper, entities: Sequence[dict[str, str]], update_cols: List[datapath._ColumnWrapper]):
+        it = iter(entities)
+        while chunk := list(islice(it, 2000)):
+            table.update(chunk, [table.RID], update_cols)
+
     def insert_new_diagnosis(self, entities: List[dict[str, dict]],
                              diagTag_RID: str,
                              process_rid: str):
@@ -391,3 +397,15 @@ class EyeAI(DerivaML):
         """
         EyeAI._batch_insert(self.schema.Diagnosis,
                             [{'Process': process_rid, 'Diagnosis_Tag': diagTag_RID, **e} for e in entities])
+        
+    def update_Image_table(self, df: pd.DataFrame):
+        """
+        Batch update Cropped info (True/ False) into the Image table.
+
+        Args:
+        - df (pd.DataFrame): A dataframe of new Cropped info to be inserted. It contains two columns: RID, and Cropped('True'/'False')
+        """
+
+        Cropped_map = {e["Name"]: e["RID"] for e in self.schema.Cropped.entities()}
+        df.replace({"Cropped": Cropped_map}, inplace=True)
+        EyeAI._batch_update(self.schema.Image, df.to_dict(orient='records'), [self.schema.Image.Cropped])
