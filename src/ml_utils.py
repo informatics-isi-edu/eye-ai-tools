@@ -500,14 +500,12 @@ class EyeAI(DerivaML):
         return {"Execution": Execution_RID, "Workflow": workflow_RID, "Process": Process}
         
 
-    def Execution_end(self, Excution_RID: str):
-        # uplaod all the assets in dir "output/ExecutionAsset/..""
-            # call function: upload Execution_Asset (where to add association??)
-        # build association: Asset - Execution
+    def Execution_end(self, Execution_RID: str, file_path: str):
+        self.upload_Execution_Asset(file_path, "output.json", Execution_RID)
 
         duration = datetime.now() - self.start_time
         hours, remainder = divmod(duration.total_seconds(), 3600)
         minutes, seconds = divmod(remainder, 60)
         Duration = f'{hours}H {minutes}min {seconds}sec'
-        print(f"Execution duration: {duration}")
-        self._batch_update(self.schema.Execution, [{"RID": Excution_RID, "Duration": Duration}], [self.schema.Execution.Duration])
+        print(f"Execution duration: {Duration}")
+        self._batch_update(self.schema.Execution, [{"RID": Execution_RID, "Duration": Duration}], [self.schema.Execution.Duration])
