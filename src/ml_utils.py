@@ -421,7 +421,7 @@ class EyeAI(DerivaML):
                 raise EyeAIException(f"{process_name} existed with RID {entities[name_list.index(process_name)]['RID']}")
         return term_rid
 
-    def add_Workflow(self, workflow_name: str, description: str = "",
+    def add_workflow(self, workflow_name: str, description: str = "",
                     github_owner: str = "", github_repo: str = "", github_file_path: str = "",
                     Process_list: List = [],
                     exist_ok: bool = False) -> str:
@@ -444,7 +444,7 @@ class EyeAI(DerivaML):
                 raise EyeAIException(f"{workflow_name} existed with RID {entities[name_list.index(workflow_name)]['RID']}")
         return term_rid
 
-    def add_Execution(self, Execution_name: str, workflow_RID: str, description: str = "", exist_ok: bool = False) -> str:
+    def add_execution(self, Execution_name: str, workflow_RID: str, description: str = "", exist_ok: bool = False) -> str:
         try:
             entities = self.schema.Execution.entities()
             name_list = [e['Name'] for e in entities]
@@ -461,7 +461,7 @@ class EyeAI(DerivaML):
                 raise EyeAIException(f"{Execution_name} existed with RID {entities[name_list.index(Execution_name)]['RID']}")
         return term_rid
 
-    def download_Execution_Asset(self, Asset_RID: str, Execution_RID, dest_dir: str=""):
+    def download_execution_asset(self, Asset_RID: str, Execution_RID, dest_dir: str=""):
             Asset_metadata = self.schema.Execution_Asset.filter(self.schema.Execution_Asset.RID == Asset_RID).entities()[0]
             Asset_URL = Asset_metadata['URL']
             file_name = Asset_metadata['Filename']
@@ -470,7 +470,7 @@ class EyeAI(DerivaML):
             self._batch_insert(self.schema.Execution_Asset_Execution, [{"Execution_Asset": Asset_RID, "Execution": Execution_RID}])
             return dest_dir+file_name
 
-    def upload_Execution_Asset(self, file_path: str, outputf_path: str, Execution_RID: str):
+    def upload_execution_asset(self, file_path: str, outputf_path: str, Execution_RID: str):
         os.system(f'deriva-upload-cli {self.host_name}  --catalog eye-ai {file_path} --output-file {outputf_path}')
         with open(outputf_path, 'r') as results:
             upload_results = json.load(results)
@@ -480,7 +480,7 @@ class EyeAI(DerivaML):
         print(entities)
         self._batch_insert(self.schema.Execution_Asset_Execution, entities)
 
-    def Execution_start(self, metadata: dict) -> dict:
+    def execution_start(self, metadata: dict) -> dict:
         # Insert or return process
         Process = []
         for proc in metadata["Process"]:
@@ -500,8 +500,8 @@ class EyeAI(DerivaML):
         return {"Execution": Execution_RID, "Workflow": workflow_RID, "Process": Process}
         
 
-    def Execution_end(self, Execution_RID: str, file_path: str):
-        self.upload_Execution_Asset(file_path, "output.json", Execution_RID)
+    def execution_end(self, Execution_RID: str, file_path: str, outputf_path: str):
+        self.upload_Execution_Asset(file_path, outputf_path, Execution_RID)
 
         duration = datetime.now() - self.start_time
         hours, remainder = divmod(duration.total_seconds(), 3600)
