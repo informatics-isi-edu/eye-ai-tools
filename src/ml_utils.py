@@ -2,9 +2,12 @@ from deriva.core import ErmrestCatalog, get_credential
 import deriva.core.ermrest_model as ermrest_model
 import deriva.core.datapath as datapath
 import pandas as pd
-
+import requests
+import os
+import json
 from itertools import islice
 from typing import List, Sequence, Callable
+from datetime import datetime
 
 
 class DerivaMLException(Exception):
@@ -212,6 +215,7 @@ class EyeAI(DerivaML):
         """
 
         super().__init__(hostname, catalog_number, 'eye-ai')
+        self.start_time = None 
 
     @staticmethod
     def _find_latest_observation(df: pd.DataFrame):
@@ -301,44 +305,6 @@ class EyeAI(DerivaML):
             ['Subject_RID', 'Diagnosis_RID', 'Full_Name', 'Image', 'Image_Side', 'Diagnosis', 'Cup/Disk_Ratio',
              'Image_Quality']]
 
-    def add_process(self, process_name: str, github_url: str = "", process_tag: str = "", description: str = "",
-                    github_checksum: str = "",
-                    exist_ok: bool = False):
-        """
-        Add a new process to the catalog.
-
-        Args:
-        - process_name (str): Name of the new process.
-        - github_url (str, optional): GitHub URL associated with the process.
-        - process_tag (str, optional): Tag for the process.
-        - description (str, optional): Description of the process.
-        - github_checksum (str, optional): Checksum of the GitHub repository.
-        - exists_ok (bool, optional):  Optional flag indicating whether to allow creation if the control vocabulary name already exists. Defaults to False.
-
-        Returns:
-        - str: RID (Record ID) of the newly created process.
-
-        Raises:
-        - Exception: If the process already exists and exists_ok is False.
-        """
-
-        try:
-            entities = self.schema.Process.entities()
-            name_list = [e['Name'] for e in entities]
-            term_rid = entities[name_list.index(process_name)]['RID']
-        except ValueError:
-            # Name is not in list of current terms
-            term_rid = self.schema.Process.insert([{'Github_URL': github_url,
-                                                'Name': process_name,
-                                                'Process_Tag': process_tag,
-                                                'Description': description,
-                                                'Github_Checksum': github_checksum}])[0]['RID']
-        else:
-            # Name is list of current terms.
-            if not exist_ok:
-                raise EyeAIException(f"{process_name} existed with RID {entities[name_list.index(process_name)]['RID']}")
-        return term_rid
-
     def compute_diagnosis(self,
                           df: pd.DataFrame,
                           diag_func: Callable,
@@ -384,20 +350,12 @@ class EyeAI(DerivaML):
         while chunk := list(islice(it, 2000)):
             table.update(chunk, [table.RID], update_cols)
 
-    def insert_new_diagnosis(self, entities: List[dict[str, dict]],
-                             diagTag_RID: str,
-                             process_rid: str):
-        """
-        Batch insert new diagnosis entities into the Diagnosis table.
+    @staticmethod
+    def _github_metadata(owner: str, repo: str, file_path: str) -> dict[str:str]:
+        response = requests.get(f"https://api.github.com/repos/{owner}/{repo}/contents/{file_path}")
+        Github_metadata = response.json()
+        return {"Github_Checksum": Github_metadata['sha'], "Github_URL": Github_metadata["html_url"]}
 
-        Args:
-        - entities (List[dict[str, dict]]): List of diagnosis entities to be inserted.
-        - diagTag_RID (str): RID of the diagnosis tag associated with the new entities.
-        - process_rid (str): RID of the process associated with the new entities.
-        """
-        EyeAI._batch_insert(self.schema.Diagnosis,
-                            [{'Process': process_rid, 'Diagnosis_Tag': diagTag_RID, **e} for e in entities])
-        
     def update_Image_table(self, df: pd.DataFrame):
         """
         Batch update Cropped info (True/ False) into the Image table.
@@ -409,3 +367,147 @@ class EyeAI(DerivaML):
         Cropped_map = {e["Name"]: e["RID"] for e in self.schema.Cropped.entities()}
         df.replace({"Cropped": Cropped_map}, inplace=True)
         EyeAI._batch_update(self.schema.Image, df.to_dict(orient='records'), [self.schema.Image.Cropped])
+
+    def insert_new_diagnosis(self, entities: List[dict[str, dict]],
+                             diagTag_RID: str,
+                             process_rid: str):
+        """
+        Batch insert new diagnosis entities into the Diagnosis table.
+
+        Args:
+        - entities (List[dict[str, dict]]): List of diagnosis entities to be inserted.
+        - diagTag_RID (str): RID of the diagnosis tag associated with the new entities.
+        - process_rid (str): RID of the process associated with the new entities.
+        """
+        self._batch_insert(self.schema.Diagnosis,
+                            [{'Process': process_rid, 'Diagnosis_Tag': diagTag_RID, **e} for e in entities])
+    
+    def add_process(self, process_name: str, process_tag: str = "", description: str = "",
+                    github_owner: str = "", github_repo: str = "", github_file_path: str = "",
+                    exist_ok: bool = False) -> str:
+        """
+        Add a new process to the catalog.
+
+        Args:
+        - process_name (str): Name of the new process.
+        - github_url (str, optional): GitHub URL associated with the process.
+        - process_tag (str, optional): Tag for the process.
+        - description (str, optional): Description of the process.
+        - github_checksum (str, optional): Checksum of the GitHub repository.
+        - exists_ok (bool, optional):  Optional flag indicating whether to allow creation if the control vocabulary name already exists. Defaults to False.
+
+        Returns:
+        - str: RID (Record ID) of the newly created process.
+
+        Raises:
+        - Exception: If the process already exists and exists_ok is False.
+        """
+
+        try:
+            entities = self.schema.Process.entities()
+            name_list = [e['Name'] for e in entities]
+            term_rid = entities[name_list.index(process_name)]['RID']
+        except ValueError:
+            # Name is not in list of current terms
+            github_metadata = self._github_metadata(github_owner, github_repo, github_file_path)
+            term_rid = self.schema.Process.insert([{'Github_URL': github_metadata["Github_URL"],
+                                                'Name': process_name,
+                                                'Process_Tag': process_tag,
+                                                'Description': description,
+                                                'Github_Checksum': github_metadata["Github_Checksum"]}])[0]['RID']
+        else:
+            # Name is list of current terms.
+            if not exist_ok:
+                raise EyeAIException(f"{process_name} existed with RID {entities[name_list.index(process_name)]['RID']}")
+        return term_rid
+
+    def add_Workflow(self, workflow_name: str, description: str = "",
+                    github_owner: str = "", github_repo: str = "", github_file_path: str = "",
+                    Process_list: List = [],
+                    exist_ok: bool = False) -> str:
+        try:
+            entities = self.schema.Workflow.entities()
+            name_list = [e['Name'] for e in entities]
+            term_rid = entities[name_list.index(workflow_name)]['RID']
+        except ValueError:
+            # Name is not in list of current terms
+            github_metadata = self._github_metadata(github_owner, github_repo, github_file_path)
+            term_rid = self.schema.Workflow.insert([{'Github_URL': github_metadata["Github_URL"],
+                                                'Name': workflow_name,
+                                                'Description': description,
+                                                'Github_Checksum': github_metadata["Github_Checksum"]}])[0]['RID']
+            entities = [{"Process": p, "Workflow": term_rid} for p in Process_list]
+            self._batch_insert(self.schema.Workflow_Process, entities)
+        else:
+            # Name is list of current terms.
+            if not exist_ok:
+                raise EyeAIException(f"{workflow_name} existed with RID {entities[name_list.index(workflow_name)]['RID']}")
+        return term_rid
+
+    def add_Execution(self, Execution_name: str, workflow_RID: str, description: str = "", exist_ok: bool = False) -> str:
+        try:
+            entities = self.schema.Execution.entities()
+            name_list = [e['Name'] for e in entities]
+            term_rid = entities[name_list.index(Execution_name)]['RID']
+        except ValueError:
+            # Name is not in list of current terms
+            term_rid = self.schema.Execution.insert([{
+                'Name': Execution_name,
+                'Description': description,
+                'Workflow': workflow_RID}])[0]['RID']
+        else:
+            # Name is list of current terms.
+            if not exist_ok:
+                raise EyeAIException(f"{Execution_name} existed with RID {entities[name_list.index(Execution_name)]['RID']}")
+        return term_rid
+
+    def download_Execution_Asset(self, Asset_RID: str, Execution_RID, dest_dir: str=""):
+            Asset_metadata = self.schema.Execution_Asset.filter(self.schema.Execution_Asset.RID == Asset_RID).entities()[0]
+            Asset_URL = Asset_metadata['URL']
+            file_name = Asset_metadata['Filename']
+            os.system(f'deriva-hatrac-cli --host {self.host_name} get {Asset_URL} "{dest_dir+file_name}"')
+
+            self._batch_insert(self.schema.Execution_Asset_Execution, [{"Execution_Asset": Asset_RID, "Execution": Execution_RID}])
+            return dest_dir+file_name
+
+    def upload_Execution_Asset(self, file_path: str, outputf_path: str, Execution_RID: str):
+        os.system(f'deriva-upload-cli {self.host_name}  --catalog eye-ai {file_path} --output-file {outputf_path}')
+        with open(outputf_path, 'r') as results:
+            upload_results = json.load(results)
+        entities = []
+        for asset in upload_results.values():
+            entities.append({"Execution_Asset":asset["Result"]["RID"], "Execution": Execution_RID})
+        print(entities)
+        self._batch_insert(self.schema.Execution_Asset_Execution, entities)
+
+    def Execution_start(self, metadata: dict) -> dict:
+        # Insert or return process
+        Process = []
+        for proc in metadata["Process"]:
+            proc_RID = self.add_process(proc["Name"], proc["Process_Tag"], proc["Description"], 
+                                         proc["owner"], proc["repo"], proc["file_path"], exist_ok = True)
+            Process.append(proc_RID)
+        # Insert or return Workflow
+        workflow_RID = self.add_Workflow(metadata["Workflow"]["Name"], metadata["Workflow"]["Description"],
+                                         metadata["Workflow"]["owner"], metadata["Workflow"]["repo"],  metadata["Workflow"]["file_path"], 
+                                         Process, exist_ok = True)
+        # Insert or return Execution
+        Execution_RID = self.add_Execution(Execution_name = metadata["Execution"]["Name"], description = metadata["Execution"]["Description"]
+                                            ,workflow_RID = workflow_RID)
+        self._batch_insert(self.schema.Dataset_Execution, [{"Dataset": metadata['Dataset'], "Execution": Execution_RID }])
+
+        self.start_time = datetime.now()
+        return {"Execution": Execution_RID, "Workflow": workflow_RID, "Process": Process}
+        
+
+    def Execution_end(self, Excution_RID: str):
+        # uplaod all the assets in dir "output/ExecutionAsset/..""
+            # call function: upload Execution_Asset (where to add association??)
+        # build association: Asset - Execution
+
+        duration = datetime.now() - self.start_time
+        hours, remainder = divmod(duration.total_seconds(), 3600)
+        minutes, seconds = divmod(remainder, 60)
+        Duration = f'{hours}H {minutes}min {seconds}sec'
+        print(f"Execution duration: {duration}")
+        self._batch_update(self.schema.Execution, [{"RID": Excution_RID, "Duration": Duration}], [self.schema.Execution.Duration])
