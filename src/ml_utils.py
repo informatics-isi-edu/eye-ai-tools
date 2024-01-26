@@ -462,7 +462,7 @@ class EyeAI(DerivaML):
         return term_rid
 
     def download_execution_asset(self, Asset_RID: str, Execution_RID, dest_dir: str=""):
-            Asset_metadata = self.schema.Execution_Asset.filter(self.schema.Execution_Asset.RID == Asset_RID).entities()[0]
+            Asset_metadata = self.schema.execution_asset.filter(self.schema.Execution_Asset.RID == Asset_RID).entities()[0]
             Asset_URL = Asset_metadata['URL']
             file_name = Asset_metadata['Filename']
             os.system(f'deriva-hatrac-cli --host {self.host_name} get {Asset_URL} "{dest_dir+file_name}"')
@@ -488,11 +488,11 @@ class EyeAI(DerivaML):
                                          proc["owner"], proc["repo"], proc["file_path"], exist_ok = True)
             Process.append(proc_RID)
         # Insert or return Workflow
-        workflow_RID = self.add_Workflow(metadata["Workflow"]["Name"], metadata["Workflow"]["Description"],
+        workflow_RID = self.add_workflow(metadata["Workflow"]["Name"], metadata["Workflow"]["Description"],
                                          metadata["Workflow"]["owner"], metadata["Workflow"]["repo"],  metadata["Workflow"]["file_path"], 
                                          Process, exist_ok = True)
         # Insert or return Execution
-        Execution_RID = self.add_Execution(Execution_name = metadata["Execution"]["Name"], description = metadata["Execution"]["Description"]
+        Execution_RID = self.add_execution(Execution_name = metadata["Execution"]["Name"], description = metadata["Execution"]["Description"]
                                             ,workflow_RID = workflow_RID)
         self._batch_insert(self.schema.Dataset_Execution, [{"Dataset": metadata['Dataset'], "Execution": Execution_RID }])
 
@@ -501,7 +501,7 @@ class EyeAI(DerivaML):
         
 
     def execution_end(self, Execution_RID: str, file_path: str, outputf_path: str):
-        self.upload_Execution_Asset(file_path, outputf_path, Execution_RID)
+        self.upload_execution_asset(file_path, outputf_path, Execution_RID)
 
         duration = datetime.now() - self.start_time
         hours, remainder = divmod(duration.total_seconds(), 3600)
