@@ -356,7 +356,7 @@ class EyeAI(DerivaML):
         Github_metadata = response.json()
         return {"Github_Checksum": Github_metadata['sha'], "Github_URL": Github_metadata["html_url"]}
 
-    def update_Image_table(self, df: pd.DataFrame):
+    def update_image_table(self, df: pd.DataFrame):
         """
         Batch update Cropped info (True/ False) into the Image table.
 
