@@ -462,7 +462,7 @@ class EyeAI(DerivaML):
         return term_rid
 
     def download_execution_asset(self, Asset_RID: str, Execution_RID, dest_dir: str=""):
-            Asset_metadata = self.schema.execution_asset.filter(self.schema.Execution_Asset.RID == Asset_RID).entities()[0]
+            Asset_metadata = self.schema.Execution_Asset.filter(self.schema.Execution_Asset.RID == Asset_RID).entities()[0]
             Asset_URL = Asset_metadata['URL']
             file_name = Asset_metadata['Filename']
             os.system(f'deriva-hatrac-cli --host {self.host_name} get {Asset_URL} "{dest_dir+file_name}"')
@@ -470,13 +470,16 @@ class EyeAI(DerivaML):
             self._batch_insert(self.schema.Execution_Asset_Execution, [{"Execution_Asset": Asset_RID, "Execution": Execution_RID}])
             return dest_dir+file_name
 
-    def upload_execution_asset(self, file_path: str, outputf_path: str, Execution_RID: str):
+    def upload_execution_assets(self, file_path: str, outputf_path: str, Execution_RID: str):
         os.system(f'deriva-upload-cli {self.host_name}  --catalog eye-ai {file_path} --output-file {outputf_path}')
         with open(outputf_path, 'r') as results:
             upload_results = json.load(results)
         entities = []
         for asset in upload_results.values():
-            entities.append({"Execution_Asset":asset["Result"]["RID"], "Execution": Execution_RID})
+            if asset["State"] == 0 and asset["Result"] is not None:
+                rid = asset["Result"].get("RID")
+                if rid is not None:
+                    entities.append({"Execution_Asset": rid, "Execution": Execution_RID})
         print(entities)
         self._batch_insert(self.schema.Execution_Asset_Execution, entities)
 
@@ -501,7 +504,7 @@ class EyeAI(DerivaML):
         
 
     def execution_end(self, Execution_RID: str, file_path: str, outputf_path: str):
-        self.upload_execution_asset(file_path, outputf_path, Execution_RID)
+        self.upload_execution_assets(file_path, outputf_path, Execution_RID)
 
         duration = datetime.now() - self.start_time
         hours, remainder = divmod(duration.total_seconds(), 3600)
