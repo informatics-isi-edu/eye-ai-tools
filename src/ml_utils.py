@@ -108,9 +108,9 @@ class DerivaML:
 
         try:
             if not self.is_vocabulary(table_name):
-                raise EyeAIException(f"The table {table_name} is not a controlled vocabulary")
+                raise DerivaMLException(f"The table {table_name} is not a controlled vocabulary")
         except KeyError:
-            raise EyeAIException(f"The schema or vocabulary table {table_name} doesn't exist.")
+            raise DerivaMLException(f"The schema or vocabulary table {table_name} doesn't exist.")
 
         try:
             entities = self.schema.tables[table_name].entities()
@@ -124,7 +124,7 @@ class DerivaML:
         else:
             # Name is list of current terms.
             if not exist_ok:
-                raise EyeAIException(f"{name} existed with RID {entities[name_list.index(name)]['RID']}")
+                raise DerivaMLException(f"{name} existed with RID {entities[name_list.index(name)]['RID']}")
         return term_rid
 
     def lookup_term(self, table_name: str, term_name: str) -> str:
@@ -145,16 +145,16 @@ class DerivaML:
         try:
             vocab_table = self.is_vocabulary(table_name)
         except KeyError:
-            raise EyeAIException(f"The schema or vocabulary table {table_name} doesn't exist.")
+            raise DerivaMLException(f"The schema or vocabulary table {table_name} doesn't exist.")
 
         if not vocab_table:
-            raise EyeAIException(f"The table {table_name} is not a controlled vocabulary")
+            raise DerivaMLException(f"The table {table_name} is not a controlled vocabulary")
 
         for term in self.schema.tables[table_name].entities():
             if term_name == term['Name'] or (term['Synonyms'] and term_name in term['Synonyms']):
                 return term['RID']
 
-        raise EyeAIException(f"Term {term_name} is not in vocabuary {table_name}")
+        raise DerivaMLException(f"Term {term_name} is not in vocabuary {table_name}")
 
     def list_vocabularies(self):
         """
@@ -182,10 +182,10 @@ class DerivaML:
         try:
             vocab_table = self.is_vocabulary(table_name)
         except KeyError:
-            raise EyeAIException(f"The schema or vocabulary table {table_name} doesn't exist.")
+            raise DerivaMLException(f"The schema or vocabulary table {table_name} doesn't exist.")
 
         if not vocab_table:
-            raise EyeAIException(f"The table {table_name} is not a controlled vocabulary")
+            raise DerivaMLException(f"The table {table_name} is not a controlled vocabulary")
 
         return pd.DataFrame(self.schema.tables[table_name].entities().fetch())
 
@@ -211,9 +211,14 @@ class DerivaML:
 
     @staticmethod
     def _github_metadata(owner: str, repo: str, file_path: str) -> dict[str:str]:
-        response = requests.get(f"https://api.github.com/repos/{owner}/{repo}/contents/{file_path}")
-        Github_metadata = response.json()
-        return {"Github_Checksum": Github_metadata['sha'], "Github_URL": Github_metadata["html_url"]}
+        try:
+            response = requests.get(f"https://api.github.com/repos/{owner}/{repo}/contents/{file_path}")
+            response.raise_for_status()
+        except:
+            raise DerivaMLException(f"Invalid GitHub repo for owner: {owner}, repo: {repo}, file_path: {file_path}")
+        else:
+            Github_metadata = response.json()
+            return {"Github_Checksum": Github_metadata['sha'], "Github_URL": Github_metadata["html_url"]}
 
     def download_asset(self, asset_url: str, destfilename: str):
             HS = HatracStore("https", self.host_name, self.credential)
@@ -226,6 +231,14 @@ class DerivaML:
         uploader.scanDirectory(assets_dir)
         results = uploader.uploadFiles()
         return results
+
+
+class Status:
+    running = "Running"
+    pending = "Pending"
+    completed = "Completed"
+    failed = "Failed"
+
 
 
 class EyeAI(DerivaML):
@@ -267,6 +280,7 @@ class EyeAI(DerivaML):
 
         super().__init__(hostname, catalog_id, 'eye-ai')
         self.start_time = None
+        self.status = Status.pending
 
 
     @staticmethod
@@ -436,6 +450,7 @@ class EyeAI(DerivaML):
         - Exception: If the process already exists and exists_ok is False.
         """
         process_tag_rid = self.lookup_term("Process_Tag", process_tag_name)
+        
         github_metadata = self._github_metadata(github_owner, github_repo, github_file_path)
         process_rid, create_new = self.add_record(self.schema.Process,
                                       {'Github_URL': github_metadata["Github_URL"],
@@ -477,8 +492,10 @@ class EyeAI(DerivaML):
     def download_execution_asset(self, asset_rid: str, execution_rid, dest_dir: str="", raw = False) -> str:
             try:
                 asset_metadata = self.schema.Execution_Asset.filter(self.schema.Execution_Asset.RID == asset_rid).entities()[0]
+                self.update_status(Status.running, execution_rid)
             except:
-                raise DerivaMLException(f"Asset {asset_rid} doesn't exsit in Execution_Asset table.")
+                self.update_status(Status.failed, execution_rid)
+                raise EyeAIException(f"Asset {asset_rid} doesn't exsit in Execution_Asset table.")
             asset_url = asset_metadata['URL']
             file_name = asset_metadata['Filename']
             # Check if file is already downloaded in the directory?
@@ -486,50 +503,68 @@ class EyeAI(DerivaML):
 
             try:
                 self._batch_insert(self.schema.Execution_Asset_Execution, [{"Execution_Asset": asset_rid, "Execution": execution_rid}])
+                self.update_status(Status.running, execution_rid)
             except:
                 if not raw:
-                    raise DerivaMLException(f"Asset {asset_rid} alreadt associated with existed with {execution_rid}")
+                    self.update_status(Status.failed, execution_rid)
+                    raise EyeAIException(f"Asset {asset_rid} alreadt associated with existed with {execution_rid}. Try raw=True")
             return file_path
 
     def upload_execution_assets(self, assets_dir: str, execution_rid: str):
-        results = self.upload_assets(assets_dir)
-        entities = []
-        for asset in results.values():
-            if asset["State"] == 0 and asset["Result"] is not None:
-                rid = asset["Result"].get("RID")
-                if rid is not None:
-                    entities.append({"Execution_Asset": rid, "Execution": execution_rid})
-        # What if a pair of execution_asset_rid and execution_rid already existed.
-        self._batch_insert(self.schema.Execution_Asset_Execution, entities)
+        try:
+            results = self.upload_assets(assets_dir)
+            self.update_status(Status.running, execution_rid)
+        except:
+            self.update_status(Status.failed, execution_rid)
+            raise EyeAIException(f"Fail to upload the files in {assets_dir} to Executoin_Asset table.")
+        
+        else:
+            entities = []
+            for asset in results.values():
+                if asset["State"] == 0 and asset["Result"] is not None:
+                    rid = asset["Result"].get("RID")
+                    if rid is not None:
+                        entities.append({"Execution_Asset": rid, "Execution": execution_rid})
+            try:
+                self._batch_insert(self.schema.Execution_Asset_Execution, entities)
+                self.update_status(Status.running, execution_rid)
+            except:
+                self.update_status(Status.failed, execution_rid)
+                raise EyeAIException(f"The file is alredy existed, and associates with Execution {execution_rid}")
 
     def execution_input_check(self, input_json: dict):
         execution_input(**input_json)
 
+    def update_status(self, new_status: Status, execution_rid: str):
+        self.status = new_status
+        self._batch_update(self.schema.Execution, [{"RID": execution_rid, "Status": self.status}], [self.schema.Execution.Status])
 
     def execution_start(self, metadata: dict) -> dict:
         # Insert processes
         process = []
         for proc in metadata["process"]:
             proc_rid = self.add_process(proc["name"], proc["process_tag_name"], proc["description"], 
-                                         proc["owner"], proc["repo"], proc["file_path"], exist_ok = True)
-            process.append(proc_rid)
+                                        proc["owner"], proc["repo"], proc["file_path"], exist_ok = True)
+            process.append(proc_rid) 
         # Insert or return Workflow
         workflow_rid = self.add_workflow(metadata["workflow"]["name"], metadata["workflow"]["description"],
-                                         metadata["workflow"]["owner"], metadata["workflow"]["repo"],  metadata["workflow"]["file_path"], 
-                                         process, exist_ok = True)
+                                        metadata["workflow"]["owner"], metadata["workflow"]["repo"],  metadata["workflow"]["file_path"], 
+                                        process, exist_ok = True)
         # Insert or return Execution
         execution_rid = self.add_execution(metadata["execution"]["name"], workflow_rid, 
                                            metadata["dataset_rid"], metadata["execution"]["description"])
+        self.update_status(Status.running, execution_rid)
         self.start_time = datetime.now()
         return {"Execution": execution_rid, "Workflow": workflow_rid , "Process": process}
         
 
-    def execution_end(self, execution_rid: str, file_path: str, outputf_path: str):
-        self.upload_execution_assets(file_path, outputf_path, execution_rid)
+    def execution_end(self, execution_rid: str, assets_dir: str):
+        self.upload_execution_assets(assets_dir, execution_rid)
 
         duration = datetime.now() - self.start_time
         hours, remainder = divmod(duration.total_seconds(), 3600)
         minutes, seconds = divmod(remainder, 60)
-        Duration = f'{hours}H {minutes}min {seconds}sec'
-        print(f"Execution duration: {Duration}")
+        Duration = f'{round(hours,0)}H {round(minutes,0)}min {round(seconds,4)}sec'
+
+        self.update_status(Status.completed, execution_rid)
         self._batch_update(self.schema.Execution, [{"RID": execution_rid, "Duration": Duration}], [self.schema.Execution.Duration])
