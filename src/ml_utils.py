@@ -230,6 +230,7 @@ class DerivaML:
         uploader.getUpdatedConfig()
         uploader.scanDirectory(assets_dir)
         results = uploader.uploadFiles()
+        uploader.cleanup()
         return results
 
 
@@ -498,9 +499,12 @@ class EyeAI(DerivaML):
                 raise EyeAIException(f"Asset {asset_rid} doesn't exsit in Execution_Asset table.")
             asset_url = asset_metadata['URL']
             file_name = asset_metadata['Filename']
-            # Check if file is already downloaded in the directory?
-            file_path = self.download_asset(asset_url, dest_dir+file_name)
-
+            try: 
+                file_path = self.download_asset(asset_url, dest_dir+file_name)
+                self.update_status(Status.running, execution_rid)
+            except:
+                self.update_status(Status.failed, execution_rid)
+                raise EyeAIException(f"Faild to download the asset {asset_rid}")
             try:
                 self._batch_insert(self.schema.Execution_Asset_Execution, [{"Execution_Asset": asset_rid, "Execution": execution_rid}])
                 self.update_status(Status.running, execution_rid)
