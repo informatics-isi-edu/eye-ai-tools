@@ -555,7 +555,7 @@ class EyeAI(DerivaML):
                                            metadata["dataset_rid"], metadata["execution"]["description"])
         self.update_status(Status.running, execution_rid)
         self.start_time = datetime.now()
-        return {"Execution": execution_rid, "Workflow": workflow_rid , "Process": process}
+        return {"execution": execution_rid, "workflow": workflow_rid , "process": process}
         
 
     def execution_end(self, execution_rid: str, assets_dir: str):
