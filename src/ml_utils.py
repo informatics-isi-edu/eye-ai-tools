@@ -240,7 +240,20 @@ class Status:
     completed = "Completed"
     failed = "Failed"
 
+class DerivaMlExec:
+    def __init__(self,CatalogML, execution_rid, assets_dir):
+        self.execution_rid = execution_rid
+        self.CatalogML = CatalogML
+        self.assets_dir = assets_dir
+        self.CatalogML.start_time = datetime.now()
 
+    def __enter__(self):
+        return self.execution_rid
+    
+    def __exit__(self, exc_type, exc_value, exc_tb):
+        print(f"Exeption type: {exc_type}, Exeption value: {exc_value}, Exeption traceback: {exc_tb}")
+        self.CatalogML.execution_end(self.execution_rid, self.assets_dir)
+        return True
 
 class EyeAI(DerivaML):
     """
@@ -543,7 +556,8 @@ class EyeAI(DerivaML):
         self.status = new_status
         self._batch_update(self.schema.Execution, [{"RID": execution_rid, "Status": self.status}], [self.schema.Execution.Status])
 
-    def execution_start(self, metadata: dict) -> dict:
+    # def execution_start(self, metadata: dict) -> dict:
+    def execution_init(self, metadata: dict, assets_dir: str) -> dict:
         # Insert processes
         process = []
         for proc in metadata["process"]:
@@ -559,7 +573,7 @@ class EyeAI(DerivaML):
                                            metadata["dataset_rid"], metadata["execution"]["description"])
         self.update_status(Status.running, execution_rid)
         self.start_time = datetime.now()
-        return {"execution": execution_rid, "workflow": workflow_rid , "process": process}
+        return {"execution": execution_rid, "workflow": workflow_rid , "process": process}, DerivaMlExec(self, execution_rid, assets_dir)
         
 
     def execution_end(self, execution_rid: str, assets_dir: str):
