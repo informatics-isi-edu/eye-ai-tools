@@ -512,10 +512,11 @@ class EyeAI(DerivaML):
                 self.update_status(Status.failed, error, execution_rid)
                 raise EyeAIException(f"Faild to download the asset {asset_rid}. Error: {error}")
             
-            asset_exec_entities = self.schema.Execution_Asset_Execution.filter(self.schema.Execution_Asset_Execution.Execution_Asset == asset_rid).entities()
-            exec_list = [e['Execution'] for e in asset_exec_entities]
-            if execution_rid not in exec_list:
-                self._batch_insert(self.schema.Execution_Asset_Execution, [{"Execution_Asset": asset_rid, "Execution": execution_rid}])
+            if execution_rid != '':
+                asset_exec_entities = self.schema.Execution_Asset_Execution.filter(self.schema.Execution_Asset_Execution.Execution_Asset == asset_rid).entities()
+                exec_list = [e['Execution'] for e in asset_exec_entities]
+                if execution_rid not in exec_list:
+                    self._batch_insert(self.schema.Execution_Asset_Execution, [{"Execution_Asset": asset_rid, "Execution": execution_rid}])
             return file_path
 
     def upload_execution_assets(self, assets_dir: str, execution_rid: str):
@@ -546,7 +547,6 @@ class EyeAI(DerivaML):
         self._batch_update(self.schema.Execution, [{"RID": execution_rid, "Status": self.status, "Status_Detail": status_detail}],
                            [self.schema.Execution.Status, self.schema.Execution.Status_Detail])
 
-    # def execution_start(self, metadata: dict) -> dict:
     def execution_init(self, metadata: dict, assets_dir: str) -> dict:
         # Insert processes
         process = []
