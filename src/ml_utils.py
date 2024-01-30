@@ -572,6 +572,17 @@ class EyeAI(DerivaML):
         execution_rid = self.add_execution(metadata["execution"]["name"], workflow_rid, 
                                            metadata["dataset_rid"], metadata["execution"]["description"])
         self.update_status(Status.running, "Inserting metadata... ", execution_rid)
+        # Insert tags
+        annot_tag = metadata.get("annotation_tag")
+        if annot_tag is not None:
+            self.add_term(table_name='Annotation_Tag', name = annot_tag['name'],
+                                description = annot_tag['description'],
+                                synonyms= annot_tag['synonyms'], exist_ok=True)
+        diag_tag = metadata.get("diagnosis_Tag")
+        if annot_tag is not None:
+            self.add_term(table_name='Diagnosis_Tag', name = diag_tag['name'],
+                                description = diag_tag['description'],
+                                synonyms= diag_tag['synonyms'], exist_ok=True)
         # Materialize bdbag
         bdb.configure_logging(force=True)
         bag_paths = [bdb.materialize(url) for url in metadata['bdbag_url']]
