@@ -513,7 +513,7 @@ class EyeAI(DerivaML):
             asset_url = asset_metadata['URL']
             file_name = asset_metadata['Filename']
             try: 
-                file_path = self.download_asset(asset_url, dest_dir+file_name)
+                file_path = self.download_asset(asset_url, str(dest_dir)+file_name)
                 self.update_status(Status.running, "Downloading assets...", execution_rid)
             except Exception as e:
                 error = format_exception(e)
