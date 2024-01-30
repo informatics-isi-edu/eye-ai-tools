@@ -8,9 +8,12 @@ import requests
 import os
 import json
 from itertools import islice
+from pathlib import Path
 from typing import List, Sequence, Callable
 from datetime import datetime
 from execution_input_check import execution_input
+from bdbag import bdbag_api as bdb
+
 
 
 class DerivaMLException(Exception):
@@ -34,6 +37,7 @@ class DerivaML:
         self.schema_name = schema_name
         self.catalog_id = catalog_id
         self.schema = self.pb.schemas[schema_name]
+        self.execution_input = execution_input
 
     def is_vocabulary(self, table_name: str) -> bool:
         """
@@ -293,6 +297,10 @@ class EyeAI(DerivaML):
         super().__init__(hostname, catalog_id, 'eye-ai')
         self.start_time = None
         self.status = Status.pending
+        self.download_path = Path("/download")
+        self.upload_path = Path("/ExecutionAssets")
+        self.download_path.mkdir(parents=True, exist_ok=True)
+        self.upload_path.mkdir(parents=True, exist_ok=True)
 
 
     @staticmethod
@@ -539,8 +547,8 @@ class EyeAI(DerivaML):
             self._batch_insert(self.schema.Execution_Asset_Execution, entities)
         return results
 
-    def execution_input_check(self, input_json: dict):
-        execution_input(**input_json)
+    # def execution_input_check(self, input_json: dict):
+    #     execution_input(**input_json)
 
     def update_status(self, new_status: Status, status_detail: str, execution_rid: str):
         self.status = new_status
@@ -548,6 +556,8 @@ class EyeAI(DerivaML):
                            [self.schema.Execution.Status, self.schema.Execution.Status_Detail])
 
     def execution_init(self, metadata: dict, assets_dir: str) -> dict:
+        # check input metadata
+        self.execution_input(**metadata)
         # Insert processes
         process = []
         for proc in metadata["process"]:
@@ -562,12 +572,23 @@ class EyeAI(DerivaML):
         execution_rid = self.add_execution(metadata["execution"]["name"], workflow_rid, 
                                            metadata["dataset_rid"], metadata["execution"]["description"])
         self.update_status(Status.running, "Inserting metadata... ", execution_rid)
+        # # create directory
+        # download_path = Path("/download")
+        # upload_path = Path("/ExecutionAssets")
+        # download_path.mkdir(parents=True, exist_ok=True)
+        # upload_path.mkdir(parents=True, exist_ok=True)
+        # Materialize bdbag
+        bdb.configure_logging(force=True)
+        bag_paths = [bdb.materialize(url) for url in metadata['bdbag_url']]
+        # download model
+        model_paths = [self.download_execution_asset(m, execution_rid, dest_dir=self.download_path) for m in metadata['models']]
         self.start_time = datetime.now()
-        return {"execution": execution_rid, "workflow": workflow_rid , "process": process}, DerivaMlExec(self, execution_rid, assets_dir)
+        return {"execution": execution_rid, "workflow": workflow_rid , "process": process, "bag_paths": bag_paths}, DerivaMlExec(self, execution_rid, assets_dir)
         
 
-    def execution_end(self, execution_rid: str, assets_dir: str):
-        self.upload_execution_assets(assets_dir, execution_rid)
+    # def execution_end(self, execution_rid: str, assets_dir: str):
+    def execution_end(self, execution_rid: str):
+        self.upload_execution_assets(self.assets_dir, execution_rid)
 
         duration = datetime.now() - self.start_time
         hours, remainder = divmod(duration.total_seconds(), 3600)
