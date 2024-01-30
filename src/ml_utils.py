@@ -527,14 +527,14 @@ class EyeAI(DerivaML):
                     self._batch_insert(self.schema.Execution_Asset_Execution, [{"Execution_Asset": asset_rid, "Execution": execution_rid}])
             return file_path
 
-    def upload_execution_assets(self, assets_dir: str, execution_rid: str):
+    def upload_execution_assets(self, execution_rid: str):
         try:
-            results = self.upload_assets(assets_dir)
+            results = self.upload_assets(self.upload_path)
             self.update_status(Status.running, "Uploading assets...", execution_rid)
         except Exception as e:
             error = format_exception(e)
             self.update_status(Status.failed, error, execution_rid)
-            raise EyeAIException(f"Fail to upload the files in {assets_dir} to Executoin_Asset table. Error: {error}")
+            raise EyeAIException(f"Fail to upload the files in {self.upload_path} to Executoin_Asset table. Error: {error}")
         else:
             asset_Exec_entities = self.schema.Execution_Asset_Execution.filter(self.schema.Execution_Asset_Execution.Execution == execution_rid).entities()
             assets_list = [e['Execution_Asset'] for e in asset_Exec_entities]
@@ -555,7 +555,7 @@ class EyeAI(DerivaML):
         self._batch_update(self.schema.Execution, [{"RID": execution_rid, "Status": self.status, "Status_Detail": status_detail}],
                            [self.schema.Execution.Status, self.schema.Execution.Status_Detail])
 
-    def execution_init(self, metadata: dict, assets_dir: str) -> dict:
+    def execution_init(self, metadata: dict) -> dict:
         # check input metadata
         self.execution_input(**metadata)
         # Insert processes
@@ -572,18 +572,13 @@ class EyeAI(DerivaML):
         execution_rid = self.add_execution(metadata["execution"]["name"], workflow_rid, 
                                            metadata["dataset_rid"], metadata["execution"]["description"])
         self.update_status(Status.running, "Inserting metadata... ", execution_rid)
-        # # create directory
-        # download_path = Path("/download")
-        # upload_path = Path("/ExecutionAssets")
-        # download_path.mkdir(parents=True, exist_ok=True)
-        # upload_path.mkdir(parents=True, exist_ok=True)
         # Materialize bdbag
         bdb.configure_logging(force=True)
         bag_paths = [bdb.materialize(url) for url in metadata['bdbag_url']]
         # download model
         model_paths = [self.download_execution_asset(m, execution_rid, dest_dir=self.download_path) for m in metadata['models']]
         self.start_time = datetime.now()
-        return {"execution": execution_rid, "workflow": workflow_rid , "process": process, "bag_paths": bag_paths}, DerivaMlExec(self, execution_rid, assets_dir)
+        return {"execution": execution_rid, "workflow": workflow_rid , "process": process, "bag_paths": bag_paths, "model_paths": model_paths}, DerivaMlExec(self, execution_rid, self.upload_path)
         
 
     # def execution_end(self, execution_rid: str, assets_dir: str):
