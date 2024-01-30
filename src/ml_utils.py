@@ -297,8 +297,8 @@ class EyeAI(DerivaML):
         super().__init__(hostname, catalog_id, 'eye-ai')
         self.start_time = None
         self.status = Status.pending
-        self.download_path = Path("/content/download")
-        self.upload_path = Path("/content/ExecutionAssets")
+        self.download_path = Path("/content/download/")
+        self.upload_path = Path("/content/ExecutionAssets/")
         self.download_path.mkdir(parents=True, exist_ok=True)
         self.upload_path.mkdir(parents=True, exist_ok=True)
 
