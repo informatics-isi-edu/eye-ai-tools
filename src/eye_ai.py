@@ -1,5 +1,9 @@
 import pandas as pd
 from typing import List, Callable
+import xml.etree.ElementTree as ET
+import pandas as pd
+from pathlib import Path
+from PIL import Image
 from deriva_ml import DerivaML, DerivaMLException
 
 
@@ -204,4 +208,41 @@ class EyeAI(DerivaML):
         """
         self._batch_insert(self.schema.Diagnosis,
                            [{'Process': process_rid, 'Diagnosis_Tag': diagTag_rid, **e} for e in entities])
+        
+    def get_bounding_box(self, svg_path: str) -> tuple:
+        tree = ET.parse(svg_path)
+        root = tree.getroot()
+        rect = root.find(".//{http://www.w3.org/2000/svg}rect")
+        x_min = int(rect.attrib['x'])
+        y_min = int(rect.attrib['y'])
+        width = int(rect.attrib['width'])
+        height = int(rect.attrib['height'])
+        bbox = (x_min, y_min, x_min + width, y_min + height)
+        print("Bounding Box:", bbox)
+        return bbox
+
+
+    def get_crop_image(self, bag_path: str) -> tuple:
+        svg_root_path = bag_path + '/data/assets/Image_Annotation/'
+        image_root_path = bag_path + '/data/assets/Image/'
+        cropped_path = Path(bag_path + "/data/assets/Image_cropped")
+        cropped_path.mkdir(parents=True, exist_ok=True)
+        image_annot_df = pd.read_csv(bag_path+'/data/Image_Annotation.csv')
+        image_df = pd.read_csv(bag_path+'/data/Image.csv')
+
+        for index, row in image_annot_df.iterrows():
+            image_rid = row['Image']
+            svg_path = svg_root_path + row['Filename']
+            bbox = self.get_bounding_box(svg_path)
+            # crop image save with nice name
+            image_file_name = image_df[image_df['RID'] == image_rid]['Filename'].values[0]
+            image_file_path = image_root_path + image_file_name
+            print(image_file_path)
+            image = Image.open(image_file_path)
+            cropped_image = image.crop(bbox)
+            cropped_image.save(str(cropped_path) + '/Cropped_' + image_file_name)
+            image_df["Cropped Filename"] = 'Cropped_' + image_file_name
+        output_csv = bag_path + "/data/Cropped_Image.csv"
+        image_df.to_csv(output_csv)
+        return cropped_path, output_csv 
 
