@@ -5,6 +5,7 @@ from deriva.transfer.upload.deriva_upload import GenericUploader
 from deriva.core.hatrac_store import HatracStore
 import pandas as pd
 import requests
+import json
 from itertools import islice
 from pathlib import Path
 from typing import List, Sequence, Callable
@@ -311,7 +312,7 @@ class DerivaML:
         self._batch_update(self.schema.Execution, [{"RID": execution_rid, "Status": self.status, "Status_Detail": status_detail}],
                            [self.schema.Execution.Status, self.schema.Execution.Status_Detail])
 
-    def download_execution_asset(self, asset_rid: str, execution_rid, dest_dir: str="") -> str:
+    def download_execution_asset(self, asset_rid: str, execution_rid="", dest_dir: str="") -> str:
         asset_metadata = self.schema.Execution_Asset.filter(self.schema.Execution_Asset.RID == asset_rid).entities()[0]
         asset_url = asset_metadata['URL']
         file_name = asset_metadata['Filename']
@@ -374,7 +375,7 @@ class DerivaMlExec:
     
     def __exit__(self, exc_type, exc_value, exc_tb):
         print(f"Exeption type: {exc_type}, Exeption value: {exc_value}, Exeption traceback: {exc_tb}")
-        self.CatalogML.execution_end(self.execution_rid, self.assets_dir)
+        self.CatalogML.execution_end(self.execution_rid)
         return True
 
 
@@ -671,28 +672,39 @@ class EyeAI(DerivaML):
     #     self._batch_update(self.schema.Execution, [{"RID": execution_rid, "Status": self.status, "Status_Detail": status_detail}],
     #                        [self.schema.Execution.Status, self.schema.Execution.Status_Detail])
 
-    def execution_init(self, metadata: dict) -> tuple:
+    def execution_init(self, metadata_rid: str) -> tuple:
+        # Download metadata json file
+        metadata_path = self.download_execution_asset(metadata_rid)
+        with open(metadata_path, 'r') as file:
+            metadata = json.load(file)
         # check input metadata
         try:
             self.configuration = ExecutionConfiguration.parse_obj(metadata)
-            print("Validation successful!")
+            print("Configuration validation successful!")
         except ValidationError as e:
-            raise EyeAIException(f"Validation failed: {e}")
+            raise EyeAIException(f"Metadata validation failed: {e}")
         metadata_records = {}
         # Insert processes
         process = []
-        for proc in metadata["process"]:
+        for proc in self.configuration.process:
             proc_rid = self.add_process(proc["name"], proc["process_tag_name"], proc["description"], 
                                         proc["owner"], proc["repo"], proc["file_path"], exist_ok = True)
             process.append(proc_rid) 
         # Insert or return Workflow
-        workflow_rid = self.add_workflow(metadata["workflow"]["name"], metadata["workflow"]["description"],
-                                        metadata["workflow"]["owner"], metadata["workflow"]["repo"],  metadata["workflow"]["file_path"], 
+        # workflow_rid = self.add_workflow(metadata["workflow"]["name"], metadata["workflow"]["description"],
+        #                                 metadata["workflow"]["owner"], metadata["workflow"]["repo"],  metadata["workflow"]["file_path"], 
+        #                                 process, exist_ok = True)
+        workflow_rid = self.add_workflow(self.configuration.workflow.name, self.configuration.workflow.description,
+                                        self.configuration.workflow.owner, self.configuration.workflow.repo, self.configuration.workflow.file_path, 
                                         process, exist_ok = True)
         # Insert or return Execution
-        execution_rid = self.add_execution(metadata["execution"]["name"], workflow_rid, 
-                                           metadata["dataset_rid"], metadata["execution"]["description"])
+        # execution_rid = self.add_execution(metadata["execution"]["name"], workflow_rid, 
+        #                                    metadata["dataset_rid"], metadata["execution"]["description"])
+        execution_rid = self.add_execution(self.configuration.execution.name, workflow_rid, 
+                                           self.configuration.dataset_rid, self.configuration.execution.description)
         self.update_status(Status.running, "Inserting metadata... ", execution_rid)
+        # build association: execution - metadata asset
+        self._batch_insert(self.schema.Execution_Asset_Execution, [{"Execution_Asset": metadata_rid, "Execution": execution_rid}])
         # Insert tags
         annot_tag = metadata.get("annotation_tag")
         if annot_tag is not None:
@@ -708,7 +720,8 @@ class EyeAI(DerivaML):
             metadata_records['diagnosis_tag_rid'] = diag_tag_rid
         # Materialize bdbag
         bdb.configure_logging(force=True)
-        bag_paths = [bdb.materialize(url) for url in metadata['bdbag_url']]
+        # bag_paths = [bdb.materialize(url) for url in metadata['bdbag_url']]
+        bag_paths = [bdb.materialize(url) for url in self.configuration.bdbag_url]
         # download model
         model_paths = [self.download_execution_asset(m, execution_rid, dest_dir=str(self.download_path)) for m in metadata['models']]
         metadata_records.update( {"execution": execution_rid, "workflow": workflow_rid , "process": process, "bag_paths": bag_paths, "model_paths": model_paths})
