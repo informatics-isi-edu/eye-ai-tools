@@ -8,9 +8,9 @@ import requests
 import json
 from itertools import islice
 from pathlib import Path
-from typing import List, Sequence, Callable
+from typing import List, Sequence, Callable, Optional
 from datetime import datetime
-from execution_input_check import ExecutionConfiguration
+from execution_configuration import ExecutionConfiguration
 from pydantic import ValidationError
 from bdbag import bdbag_api as bdb
 
@@ -83,8 +83,8 @@ class DerivaML:
         return [fk.columns[0].name for fk in table.foreign_keys
                 if len(fk.columns) == 1 and self.is_vocabulary(fk.pk_table)]
 
-    def add_record(self, table: datapath._TableWrapper, 
-                   record: dict[str, str], 
+    def add_record(self, table: datapath._TableWrapper,
+                   record: dict[str, str],
                    unique_col: str,
                    exist_ok: bool = False) -> str:
         try:
@@ -95,9 +95,10 @@ class DerivaML:
             record_rid = table.insert([record])[0]['RID']
         else:
             if not exist_ok:
-                raise DerivaMLException(f"{record[unique_col]} existed with RID {entities[name_list.index(record[unique_col])]['RID']}")
+                raise DerivaMLException(
+                    f"{record[unique_col]} existed with RID {entities[name_list.index(record[unique_col])]['RID']}")
         return record_rid
-    
+
     def add_process(self, process_name: str, process_tag_name: str = "", description: str = "",
                     github_owner: str = "", github_repo: str = "", github_file_path: str = "",
                     exist_ok: bool = False) -> str:
@@ -119,7 +120,7 @@ class DerivaML:
         - Exception: If the process already exists and exists_ok is False.
         """
         process_tag_rid = self.lookup_term("Process_Tag", process_tag_name)
-        
+
         github_metadata = self._github_metadata(github_owner, github_repo, github_file_path)
         process_rid = self.add_record(self.schema.Process,
                                       {'Github_URL': github_metadata["Github_URL"],
@@ -127,21 +128,24 @@ class DerivaML:
                                        'Process_Tag': process_tag_rid,
                                        'Description': description,
                                        'Github_Checksum': github_metadata["Github_Checksum"]},
-                                       "Name", exist_ok)
+                                      "Name", exist_ok)
         return process_rid
 
     def add_workflow(self, workflow_name: str, description: str = "",
-                    github_owner: str = "", github_repo: str = "", github_file_path: str = "",
-                    process_list: List = [],
-                    exist_ok: bool = False) -> str:
+                     github_owner: str = "", github_repo: str = "", github_file_path: str = "",
+                     process_list: Optional[List] = None,
+                     exist_ok: bool = False) -> str:
+
+        process_list = process_list or ""
         github_metadata = self._github_metadata(github_owner, github_repo, github_file_path)
-        workflow_rid = self.add_record(self.schema.Workflow, 
+        workflow_rid = self.add_record(self.schema.Workflow,
                                        {'Github_URL': github_metadata["Github_URL"],
                                         'Name': workflow_name,
                                         'Description': description,
                                         'Github_Checksum': github_metadata["Github_Checksum"]},
-                                        'Name', exist_ok)
-        proc_work_entities = self.schema.Workflow_Process.filter(self.schema.Workflow_Process.Workflow == workflow_rid).entities()
+                                       'Name', exist_ok)
+        proc_work_entities = self.schema.Workflow_Process.filter(
+            self.schema.Workflow_Process.Workflow == workflow_rid).entities()
         proc_work_list = [e['Process'] for e in proc_work_entities]
         asso_entities = [{"Process": p, "Workflow": workflow_rid} for p in process_list if p not in proc_work_list]
         self._batch_insert(self.schema.Workflow_Process, asso_entities)
@@ -149,18 +153,19 @@ class DerivaML:
 
     def add_execution(self, Execution_name: str, workflow_RID: str, datasets: List[str],
                       description: str = "", exist_ok: bool = False) -> str:
-        execution_rid = self.add_record(self.schema.Execution, 
+        execution_rid = self.add_record(self.schema.Execution,
                                         {'Name': Execution_name,
                                          'Description': description,
                                          'Workflow': workflow_RID},
-                                         "Name", exist_ok)
-        self._batch_insert(self.schema.Dataset_Execution, [{"Dataset": d, "Execution": execution_rid } for d in datasets])
+                                        "Name", exist_ok)
+        self._batch_insert(self.schema.Dataset_Execution,
+                           [{"Dataset": d, "Execution": execution_rid} for d in datasets])
         return execution_rid
-    
+
     def add_term(self, table_name: str,
                  name: str,
                  description: str,
-                 synonyms: List[str] =[],
+                 synonyms: Optional[List[str]] = None,
                  exist_ok: bool = False):
         """
         Creates a new control vocabulary term in the control vocabulary table.
@@ -270,7 +275,7 @@ class DerivaML:
         users = self.pb.schemas['public']
         path = users.ERMrest_Client.path
         return pd.DataFrame(path.entities().fetch())[['ID', 'Full_Name']]
-    
+
     @staticmethod
     def _batch_insert(table: datapath._TableWrapper, entities: Sequence[dict]):
         it = iter(entities)
@@ -278,7 +283,8 @@ class DerivaML:
             table.insert(chunk)
 
     @staticmethod
-    def _batch_update(table: datapath._TableWrapper, entities: Sequence[dict], update_cols: List[datapath._ColumnWrapper]):
+    def _batch_update(table: datapath._TableWrapper, entities: Sequence[dict],
+                      update_cols: List[datapath._ColumnWrapper]):
         it = iter(entities)
         while chunk := list(islice(it, 2000)):
             table.update(chunk, [table.RID], update_cols)
@@ -288,16 +294,16 @@ class DerivaML:
         try:
             response = requests.get(f"https://api.github.com/repos/{owner}/{repo}/contents/{file_path}")
             response.raise_for_status()
-        except:
+        except Exception:
             raise DerivaMLException(f"Invalid GitHub repo for owner: {owner}, repo: {repo}, file_path: {file_path}")
         else:
             Github_metadata = response.json()
             return {"Github_Checksum": Github_metadata['sha'], "Github_URL": Github_metadata["html_url"]}
 
     def download_asset(self, asset_url: str, destfilename: str):
-            HS = HatracStore("https", self.host_name, self.credential)
-            HS.get_obj(path=asset_url, destfilename = destfilename)
-            return destfilename
+        HS = HatracStore("https", self.host_name, self.credential)
+        HS.get_obj(path=asset_url, destfilename=destfilename)
+        return destfilename
 
     def upload_assets(self, assets_dir: str):
         uploader = GenericUploader(server={"host": self.host_name, "protocol": "https", "catalog_id": self.catalog_id})
@@ -309,28 +315,31 @@ class DerivaML:
 
     def update_status(self, new_status: str, status_detail: str, execution_rid: str):
         self.status = new_status
-        self._batch_update(self.schema.Execution, [{"RID": execution_rid, "Status": self.status, "Status_Detail": status_detail}],
+        self._batch_update(self.schema.Execution,
+                           [{"RID": execution_rid, "Status": self.status, "Status_Detail": status_detail}],
                            [self.schema.Execution.Status, self.schema.Execution.Status_Detail])
 
-    def download_execution_asset(self, asset_rid: str, execution_rid="", dest_dir: str="") -> str:
+    def download_execution_asset(self, asset_rid: str, execution_rid="", dest_dir: str = "") -> str:
         asset_metadata = self.schema.Execution_Asset.filter(self.schema.Execution_Asset.RID == asset_rid).entities()[0]
         asset_url = asset_metadata['URL']
         file_name = asset_metadata['Filename']
-        try: 
-            file_path = self.download_asset(asset_url, str(dest_dir)+'/'+file_name)
+        try:
+            file_path = self.download_asset(asset_url, str(dest_dir) + '/' + file_name)
             self.update_status(Status.running, "Downloading assets...", execution_rid)
         except Exception as e:
             error = format_exception(e)
             self.update_status(Status.failed, error, execution_rid)
             raise EyeAIException(f"Faild to download the asset {asset_rid}. Error: {error}")
-        
+
         if execution_rid != '':
-            asset_exec_entities = self.schema.Execution_Asset_Execution.filter(self.schema.Execution_Asset_Execution.Execution_Asset == asset_rid).entities()
+            asset_exec_entities = self.schema.Execution_Asset_Execution.filter(
+                self.schema.Execution_Asset_Execution.Execution_Asset == asset_rid).entities()
             exec_list = [e['Execution'] for e in asset_exec_entities]
             if execution_rid not in exec_list:
-                self._batch_insert(self.schema.Execution_Asset_Execution, [{"Execution_Asset": asset_rid, "Execution": execution_rid}])
+                self._batch_insert(self.schema.Execution_Asset_Execution,
+                                   [{"Execution_Asset": asset_rid, "Execution": execution_rid}])
         return file_path
-        
+
     def upload_execution_assets(self, execution_rid: str):
         try:
             results = self.upload_assets(str(self.upload_path))
@@ -338,9 +347,11 @@ class DerivaML:
         except Exception as e:
             error = format_exception(e)
             self.update_status(Status.failed, error, execution_rid)
-            raise EyeAIException(f"Fail to upload the files in {self.upload_path} to Executoin_Asset table. Error: {error}")
+            raise EyeAIException(
+                f"Fail to upload the files in {self.upload_path} to Executoin_Asset table. Error: {error}")
         else:
-            asset_Exec_entities = self.schema.Execution_Asset_Execution.filter(self.schema.Execution_Asset_Execution.Execution == execution_rid).entities()
+            asset_Exec_entities = self.schema.Execution_Asset_Execution.filter(
+                self.schema.Execution_Asset_Execution.Execution == execution_rid).entities()
             assets_list = [e['Execution_Asset'] for e in asset_Exec_entities]
             entities = []
             for asset in results.values():
@@ -357,10 +368,11 @@ class DerivaML:
         duration = datetime.now() - self.start_time
         hours, remainder = divmod(duration.total_seconds(), 3600)
         minutes, seconds = divmod(remainder, 60)
-        Duration = f'{round(hours,0)}H {round(minutes,0)}min {round(seconds,4)}sec'
+        Duration = f'{round(hours, 0)}H {round(minutes, 0)}min {round(seconds, 4)}sec'
 
         self.update_status(Status.completed, "Execution ended.", execution_rid)
-        self._batch_update(self.schema.Execution, [{"RID": execution_rid, "Duration": Duration}], [self.schema.Execution.Duration])
+        self._batch_update(self.schema.Execution, [{"RID": execution_rid, "Duration": Duration}],
+                           [self.schema.Execution.Duration])
 
 
 class DerivaMlExec:
@@ -372,7 +384,7 @@ class DerivaMlExec:
 
     def __enter__(self):
         return self.execution_rid
-    
+
     def __exit__(self, exc_type, exc_value, exc_tb):
         print(f"Exeption type: {exc_type}, Exeption value: {exc_value}, Exeption traceback: {exc_tb}")
         self.CatalogML.execution_end(self.execution_rid)
@@ -381,7 +393,8 @@ class DerivaMlExec:
 
 class EyeAI(DerivaML):
     """
-    EyeAI is a class that extends DerivaML and provides additional routines for working with eye-ai catalogs using deriva-py.
+    EyeAI is a class that extends DerivaML and provides additional routines for working with eye-ai
+    catalogs using deriva-py.
 
     Attributes:
     - protocol (str): The protocol used to connect to the catalog (e.g., "https").
@@ -395,16 +408,20 @@ class EyeAI(DerivaML):
     - __init__(self, hostname: str = 'www.eye-ai.org', catalog_number: str = 'eye-ai'): Initializes the EyeAI object.
     - create_new_vocab(self, schema_name: str, table_name: str, name: str, description: str, synonyms: List[str] = [],
             exist_ok: bool = False) -> str: Creates a new controlled vocabulary in the catalog.
-    - image_tall(self, dataset_rid: str, diagnosis_tag_rid: str): Retrieves tall-format image data based on provided diagnosis tag filters.
+    - image_tall(self, dataset_rid: str, diagnosis_tag_rid: str): Retrieves tall-format image data based on provided
+      diagnosis tag filters.
     - add_process(self, process_name: str, github_url: str = "", process_tag: str = "", description: str = "",
                     github_checksum: str = "", exists_ok: bool = False) -> str: Adds a new process to the Process table.
     - compute_diagnosis(self, df: pd.DataFrame, diag_func: Callable, cdr_func: Callable,
-                          image_quality_func: Callable) -> List[dict]: Computes new diagnosis based on provided functions.
-    - insert_new_diagnosis(self, entities: List[dict[str, dict]], diagTag_RID: str, process_rid: str): Batch inserts new diagnosis entities into the Diagnoisis table.
+                          image_quality_func: Callable) -> List[dict]: Computes new diagnosis based on
+                                                                       provided functions.
+    - insert_new_diagnosis(self, entities: List[dict[str, dict]], diagTag_RID: str, process_rid: str): Batch inserts new
+      diagnosis entities into the Diagnoisis table.
 
     Private Methods:
     - _find_latest_observation(df: pd.DataFrame): Finds the latest observations for each subject in the DataFrame.
-    - _batch_insert(table: datapath._TableWrapper, entities: Sequence[dict[str, str]]): Batch inserts entities into a table.
+    - _batch_insert(table: datapath._TableWrapper, entities: Sequence[dict[str, str]]): Batch inserts
+       entities into a table.
     """
 
     def __init__(self, hostname: str = 'www.eye-ai.org', catalog_id: str = 'eye-ai'):
@@ -427,7 +444,8 @@ class EyeAI(DerivaML):
         - df (pd.DataFrame): Input DataFrame containing columns 'Subject_RID' and 'Date_of_Encounter'.
 
         Returns:
-        - pd.DataFrame: DataFrame filtered to keep only the rows corresponding to the latest encounters for each subject.
+        - pd.DataFrame: DataFrame filtered to keep only the rows corresponding to the latest encounters
+          for each subject.
         """
         latest_encounters = {}
         for index, row in df.iterrows():
@@ -449,7 +467,8 @@ class EyeAI(DerivaML):
         - diagnosis_tag_rid (str): RID of the diagnosis tag used for further filtering.
 
         Returns:
-        - pd.DataFrame: DataFrame containing tall-format image data from fist observation of the subject, based on the provided filters.
+        - pd.DataFrame: DataFrame containing tall-format image data from fist observation of the subject,
+          based on the provided filters.
         """
         # Get references to tables to start path.
         subject_dataset = self.schema.Subject_Dataset
@@ -490,12 +509,16 @@ class EyeAI(DerivaML):
         if diagnosis_tag_rid in Grading_tags:
             image_frame = pd.merge(image_frame, self.user_list(), how="left", left_on='RCB', right_on='ID')
         else:
-            image_frame = image_frame.assign(Full_Name=diag_tag_vocab[diag_tag_vocab['RID'] == diagnosis_tag_rid]["Name"].item())
+            image_frame = image_frame.assign(
+                Full_Name=diag_tag_vocab[diag_tag_vocab['RID'] == diagnosis_tag_rid]["Name"].item())
 
         # Now flatten out Diagnosis_Vocab, Image_quality_Vocab, Image_Side_Vocab
-        diagnosis_vocab = self.list_vocabulary('Diagnosis_Image_Vocab')[["RID", "Name"]].rename(columns={"RID":'Diagnosis_Vocab', "Name":"Diagnosis"})
-        image_quality_vocab = self.list_vocabulary('Image_Quality_Vocab')[["RID", "Name"]].rename(columns={"RID":'Image_Quality_Vocab', "Name":"Image_Quality"})
-        image_side_vocab = self.list_vocabulary('Image_Side_Vocab')[["RID", "Name"]].rename(columns={"RID":'Image_Side_Vocab', "Name":"Image_Side"})
+        diagnosis_vocab = self.list_vocabulary('Diagnosis_Image_Vocab')[["RID", "Name"]].rename(
+            columns={"RID": 'Diagnosis_Vocab', "Name": "Diagnosis"})
+        image_quality_vocab = self.list_vocabulary('Image_Quality_Vocab')[["RID", "Name"]].rename(
+            columns={"RID": 'Image_Quality_Vocab', "Name": "Image_Quality"})
+        image_side_vocab = self.list_vocabulary('Image_Side_Vocab')[["RID", "Name"]].rename(
+            columns={"RID": 'Image_Side_Vocab', "Name": "Image_Side"})
 
         image_frame = pd.merge(image_frame, diagnosis_vocab, how="left", on='Diagnosis_Vocab')
         image_frame = pd.merge(image_frame, image_quality_vocab, how="left", on='Image_Quality_Vocab')
@@ -520,7 +543,8 @@ class EyeAI(DerivaML):
         - image_quality_func (Callable): Function to compute Image Quality.
 
         Returns:
-        - List[Dict[str, Union[str, float]]]: List of dictionaries representing the generated Diagnosis. The Cup/Disk_Ratio is always round to 4 decimal places.
+        - List[Dict[str, Union[str, float]]]: List of dictionaries representing the generated Diagnosis.
+          The Cup/Disk_Ratio is always round to 4 decimal places.
         """
 
         result = df.groupby("Image").agg({"Cup/Disk_Ratio": cdr_func,
@@ -543,7 +567,8 @@ class EyeAI(DerivaML):
         Batch update Cropped info (True/ False) into the Image table.
 
         Args:
-        - df (pd.DataFrame): A dataframe of new Cropped info to be inserted. It contains two columns: RID, and Cropped('True'/'False')
+        - df (pd.DataFrame): A dataframe of new Cropped info to be inserted. It contains two columns: RID,
+          and Cropped('True'/'False')
         """
         Cropped_map = {e["Name"]: e["RID"] for e in self.schema.Cropped.entities()}
         df.replace({"Cropped": Cropped_map}, inplace=True)
@@ -578,38 +603,44 @@ class EyeAI(DerivaML):
         # Insert processes
         process = []
         for proc in self.configuration.process:
-            proc_rid = self.add_process(proc.name, proc.process_tag_name, proc.description, 
-                            proc.owner, proc.repo, proc.file_path, exist_ok = True)
-            process.append(proc_rid) 
-        # Insert or return Workflow
-        workflow_rid = self.add_workflow(self.configuration.workflow.name, self.configuration.workflow.description,
-                                        self.configuration.workflow.owner, self.configuration.workflow.repo, self.configuration.workflow.file_path, 
-                                        process, exist_ok = True)
+            proc_rid = self.add_process(proc.name, proc.process_tag_name, proc.description,
+                                        proc.owner, proc.repo, proc.file_path, exist_ok=True)
+            process.append(proc_rid)
+            # Insert or return Workflow
+        workflow_rid = self.add_workflow(self.configuration.workflow.name,
+                                         self.configuration.workflow.description,
+                                         self.configuration.workflow.owner,
+                                         self.configuration.workflow.repo,
+                                         self.configuration.workflow.file_path,
+                                         process, exist_ok=True)
         # Insert or return Execution
-        execution_rid = self.add_execution(self.configuration.execution.name, workflow_rid, 
+        execution_rid = self.add_execution(self.configuration.execution.name, workflow_rid,
                                            self.configuration.dataset_rid, self.configuration.execution.description)
         self.update_status(Status.running, "Inserting metadata... ", execution_rid)
         # build association: execution - metadata asset
-        self._batch_insert(self.schema.Execution_Asset_Execution, [{"Execution_Asset": metadata_rid, "Execution": execution_rid}])
+        self._batch_insert(self.schema.Execution_Asset_Execution,
+                           [{"Execution_Asset": metadata_rid, "Execution": execution_rid}])
         # Insert tags
         annot_tag = metadata.get("annotation_tag")
         if annot_tag is not None:
-            annot_tag_rid = self.add_term(table_name='Annotation_Tag', name = annot_tag['name'],
-                                          description = annot_tag['description'],
-                                          synonyms= annot_tag['synonyms'], exist_ok=True)
+            annot_tag_rid = self.add_term(table_name='Annotation_Tag', name=annot_tag['name'],
+                                          description=annot_tag['description'],
+                                          synonyms=annot_tag['synonyms'], exist_ok=True)
             metadata_records['annotation_tag_rid'] = annot_tag_rid
         diag_tag = metadata.get("diagnosis_Tag")
         if diag_tag is not None:
-            diag_tag_rid = self.add_term(table_name='Diagnosis_Tag', name = diag_tag['name'],
-                                description = diag_tag['description'],
-                                synonyms= diag_tag['synonyms'], exist_ok=True)
+            diag_tag_rid = self.add_term(table_name='Diagnosis_Tag', name=diag_tag['name'],
+                                         description=diag_tag['description'],
+                                         synonyms=diag_tag['synonyms'], exist_ok=True)
             metadata_records['diagnosis_tag_rid'] = diag_tag_rid
         # Materialize bdbag
         bdb.configure_logging(force=True)
         bag_paths = [bdb.materialize(url) for url in self.configuration.bdbag_url]
         # download model
-        model_paths = [self.download_execution_asset(m, execution_rid, dest_dir=str(self.download_path)) for m in self.configuration.models]
-        metadata_records.update( {"execution": execution_rid, "workflow": workflow_rid , "process": process, "bag_paths": bag_paths, "model_paths": model_paths, 'metadata_path': metadata_path})
+        model_paths = [self.download_execution_asset(m, execution_rid, dest_dir=str(self.download_path)) for m in
+                       self.configuration.models]
+        metadata_records.update(
+            {"execution": execution_rid, "workflow": workflow_rid, "process": process, "bag_paths": bag_paths,
+             "model_paths": model_paths, 'metadata_path': metadata_path})
         self.start_time = datetime.now()
         return metadata_records, DerivaMlExec(self, execution_rid, str(self.upload_path))
-        
