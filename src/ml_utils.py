@@ -317,7 +317,7 @@ class DerivaML:
         asset_url = asset_metadata['URL']
         file_name = asset_metadata['Filename']
         try: 
-            file_path = self.download_asset(asset_url, str(dest_dir)+file_name)
+            file_path = self.download_asset(asset_url, str(dest_dir)+'/'+file_name)
             self.update_status(Status.running, "Downloading assets...", execution_rid)
         except Exception as e:
             error = format_exception(e)
@@ -674,7 +674,7 @@ class EyeAI(DerivaML):
 
     def execution_init(self, metadata_rid: str) -> tuple:
         # Download metadata json file
-        metadata_path = self.download_execution_asset(metadata_rid)
+        metadata_path = self.download_execution_asset(asset_rid=metadata_rid, dest_dir=str(self.download_path))
         with open(metadata_path, 'r') as file:
             metadata = json.load(file)
         # check input metadata
@@ -725,8 +725,8 @@ class EyeAI(DerivaML):
         # bag_paths = [bdb.materialize(url) for url in metadata['bdbag_url']]
         bag_paths = [bdb.materialize(url) for url in self.configuration.bdbag_url]
         # download model
-        model_paths = [self.download_execution_asset(m, execution_rid, dest_dir=str(self.download_path)) for m in metadata['models']]
-        metadata_records.update( {"execution": execution_rid, "workflow": workflow_rid , "process": process, "bag_paths": bag_paths, "model_paths": model_paths})
+        model_paths = [self.download_execution_asset(m, execution_rid, dest_dir=str(self.download_path)) for m in self.configuration.models]
+        metadata_records.update( {"execution": execution_rid, "workflow": workflow_rid , "process": process, "bag_paths": bag_paths, "model_paths": model_paths, 'metadata_path': metadata_path})
         self.start_time = datetime.now()
         return metadata_records, DerivaMlExec(self, execution_rid, str(self.upload_path))
         
