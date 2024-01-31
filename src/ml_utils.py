@@ -687,8 +687,10 @@ class EyeAI(DerivaML):
         # Insert processes
         process = []
         for proc in self.configuration.process:
-            proc_rid = self.add_process(proc["name"], proc["process_tag_name"], proc["description"], 
-                                        proc["owner"], proc["repo"], proc["file_path"], exist_ok = True)
+            # proc_rid = self.add_process(proc["name"], proc["process_tag_name"], proc["description"], 
+            #                             proc["owner"], proc["repo"], proc["file_path"], exist_ok = True)
+            proc_rid = self.add_process(proc.name, proc.process_tag_name, proc.description, 
+                            proc.owner, proc.repo, proc.file_path, exist_ok = True)
             process.append(proc_rid) 
         # Insert or return Workflow
         # workflow_rid = self.add_workflow(metadata["workflow"]["name"], metadata["workflow"]["description"],
