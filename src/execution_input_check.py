@@ -1,5 +1,4 @@
 from typing import List, Optional
-
 from pydantic import BaseModel
 
 class Process(BaseModel):
@@ -31,7 +30,7 @@ class DiagnosisTag(BaseModel):
     description: str
     synonyms: List[str] = []
 
-class execution_input(BaseModel):
+class ExecutionConfiguration(BaseModel):
     host: str
     catalog_id: str
     dataset_rid: List[str]
