@@ -4,6 +4,9 @@ import json
 import os
 import pandas as pd
 from eye_ai import EyeAI
+from pathlib import PurePath
+from eye_ai_ml.glaucoma.optic_disk_crop import preprocess_and_crop
+
 
 def main(hostname: str, catalog_id:str, configuration_rid: str):
     EA = EyeAI(hostname = hostname, catalog_id = catalog_id )
@@ -11,11 +14,6 @@ def main(hostname: str, catalog_id:str, configuration_rid: str):
 # ============================================================
 # Initiate an Execution
     configuration_records, cm = EA.execution_init(configuration_rid=configuration_rid)
-
-# Clone github repo
-    for proc in EA.configuration.process:
-        repo_url = f'https://github.com/{proc.owner}/{proc.repo}.git'
-        os.system(f'git clone {repo_url}')
 
 # Data Preprocessing (Selecting image of angle 2 (Field 2) -- Image angle vocab 2SK6;)
     bag_path1 = configuration_records['bag_paths'][0]
@@ -26,21 +24,18 @@ def main(hostname: str, catalog_id:str, configuration_rid: str):
     Dataset_Field_2.to_csv(file2_csv_path, index=False)
 
 # Execute Proecss algorithm (Cropping)
-    os.chdir('/content/eye-ai-ml/Glaucoma Suspect or No Glaaucoma/')
-    from Cleaned_Optic_Disc_Cropping_Algorithm_1_0_3_SVG import preprocess_and_crop
     with cm as exec:
         preprocess_and_crop(
-            "/content/Dataset_2-5K2C/data/assets/Image/",
+            bag_path1+"/data/assets/Image/",
             file2_csv_path,
-            '../../output/output.csv',
-            'template.jpg', 
-            '../../output/',
-            '/content/'+configuration_records['model_paths'][0],
+            './output/output.csv',
+            'template.jpg',
+            './output/',
+            './'+configuration_records['model_paths'][0],
             configuration_records['process'][0],
             configuration_records['annotation_tag_rid'],
             EA.configuration.annotation_tag.name
             )
-        os.chdir('/content')
 
 # ============================================================
 # ML result analysis
@@ -54,7 +49,7 @@ def main(hostname: str, catalog_id:str, configuration_rid: str):
 
 # Upload results
     # upload cropping bounding box
-    EA.upload_assets(f'/content/output/{configuration_records["process"][0]}')
+    EA.upload_assets(f'./output/{configuration_records["process"][0]}')
     # upload cropping metadata
     EA.update_image_table(cropped_info)
 
