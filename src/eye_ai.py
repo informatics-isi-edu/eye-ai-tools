@@ -4,7 +4,7 @@ import xml.etree.ElementTree as ET
 import pandas as pd
 from pathlib import Path
 from PIL import Image
-from deriva_ml import DerivaML, DerivaMLException
+from deriva_ml.deriva_ml import DerivaML, DerivaMLException
 
 
 class EyeAIException(DerivaMLException):
