@@ -1,4 +1,3 @@
-import pandas as pd
 from typing import List, Callable
 import xml.etree.ElementTree as ET
 import pandas as pd
@@ -221,7 +220,6 @@ class EyeAI(DerivaML):
         print("Bounding Box:", bbox)
         return bbox
 
-
     def get_crop_image(self, bag_path: str) -> tuple:
         svg_root_path = bag_path + '/data/assets/Image_Annotation/'
         image_root_path = bag_path + '/data/assets/Image/'
@@ -245,4 +243,3 @@ class EyeAI(DerivaML):
         output_csv = bag_path + "/data/Cropped_Image.csv"
         image_df.to_csv(output_csv)
         return cropped_path, output_csv 
-
