@@ -13,7 +13,7 @@ def main(hostname: str, catalog_id:str, configuration_rid: str):
     angle2_rid = "2SK6"
 # ============================================================
 # Initiate an Execution
-    configuration_records, cm = EA.execution_init(configuration_rid=configuration_rid)
+    configuration_records = EA.execution_init(configuration_rid=configuration_rid)
 
 # Data Preprocessing (Selecting image of angle 2 (Field 2) -- Image angle vocab 2SK6;)
     bag_path1 = configuration_records['bag_paths'][0]
@@ -24,6 +24,7 @@ def main(hostname: str, catalog_id:str, configuration_rid: str):
     Dataset_Field_2.to_csv(file2_csv_path, index=False)
 
 # Execute Proecss algorithm (Cropping)
+    cm = EA.start_execution(execution_rid=configuration_records['execution'])
     with cm as exec:
         preprocess_and_crop(
             bag_path1+"/data/assets/Image/",
@@ -32,7 +33,7 @@ def main(hostname: str, catalog_id:str, configuration_rid: str):
             'template.jpg',
             './output/',
             './'+configuration_records['model_paths'][0],
-            configuration_records['process'][0],
+            configuration_records['execution'],
             configuration_records['annotation_tag_rid'],
             EA.configuration.annotation_tag.name
             )
@@ -49,7 +50,7 @@ def main(hostname: str, catalog_id:str, configuration_rid: str):
 
 # Upload results
     # upload cropping bounding box
-    EA.upload_assets(f'./output/{configuration_records["process"][0]}')
+    EA.upload_assets(f'./output/{configuration_records["execution"]}')
     # upload cropping metadata
     EA.update_image_table(cropped_info)
 
