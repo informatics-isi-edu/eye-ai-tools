@@ -1,33 +1,38 @@
 import argparse
-import requests
-import json
 import os
+import numpy as np
 import pandas as pd
 from eye_ai import EyeAI
 from pathlib import PurePath
 from eye_ai_ml.glaucoma.optic_disk_crop import preprocess_and_crop
 
+def filter_angle2(bag_path: str) -> str:
+    Dataset_Path = os.path.join(bag_path, 'data/Image.csv')
+    Dataset = pd.read_csv(Dataset_Path)
+    Dataset_Field_2 = Dataset[Dataset['Image_Angle_Vocab'] == "2SK6"]
+    file2_csv_path = f"{bag_path}_Field_2.csv"
+    Dataset_Field_2.to_csv(file2_csv_path, index=False)
+    return file2_csv_path
+
+def image_cropping_metadata(output_csv_path: str) -> pd.DataFrame:
+    cropped_info = pd.read_csv(output_csv_path)[["Image RID", "Worked Image Cropping Function"]]
+    cropped_info['Cropped'] = np.where(cropped_info['Worked Image Cropping Function'] == 'Raw Cropped to Eye', 'False', 'True')
+    cropped_info = cropped_info[["Image RID", "Cropped"]]
+    cropped_info.rename(columns={'Image RID': 'RID'}, inplace=True)
+    return cropped_info
 
 def main(hostname: str, catalog_id:str, configuration_rid: str):
     EA = EyeAI(hostname = hostname, catalog_id = catalog_id )
-    angle2_rid = "2SK6"
-# ============================================================
-# Initiate an Execution
+    # Initiate an Execution
     configuration_records = EA.execution_init(configuration_rid=configuration_rid)
 
-# Data Preprocessing (Selecting image of angle 2 (Field 2) -- Image angle vocab 2SK6;)
-    bag_path1 = configuration_records['bag_paths'][0]
-    Dataset_Path = os.path.join(bag_path1, 'data/Image.csv')
-    Dataset = pd.read_csv(Dataset_Path)
-    Dataset_Field_2 = Dataset[Dataset['Image_Angle_Vocab'] == "2SK6"]
-    file2_csv_path = f"{bag_path1}_Field_2.csv"
-    Dataset_Field_2.to_csv(file2_csv_path, index=False)
+    # Data Preprocessing (Selecting image of angle 2 (Field 2) -- Image angle vocab 2SK6;)
+    file2_csv_path = filter_angle2(configuration_records['bag_paths'][0])
 
-# Execute Proecss algorithm (Cropping)
-    cm = EA.start_execution(execution_rid=configuration_records['execution'])
-    with cm as exec:
+    # Execute Proecss algorithm (Cropping)
+    with EA.start_execution(execution_rid=configuration_records['execution']) as exec:
         preprocess_and_crop(
-            bag_path1+"/data/assets/Image/",
+            configuration_records['bag_paths'][0]+"/data/assets/Image/",
             file2_csv_path,
             './output/output.csv',
             'template.jpg',
@@ -35,23 +40,14 @@ def main(hostname: str, catalog_id:str, configuration_rid: str):
             './'+configuration_records['model_paths'][0],
             configuration_records['execution'],
             configuration_records['annotation_tag_rid'],
-            EA.configuration.annotation_tag.name
+            EA.configuration.annotation_tag.name,
+            False
             )
-
-# ============================================================
-# ML result analysis
-    import numpy as np
-    output_csv_path = "output/output.csv"
-    cropped_info = pd.read_csv(output_csv_path)[["Image RID", "Worked Image Cropping Function"]]
-
-    cropped_info['Cropped'] = np.where(cropped_info['Worked Image Cropping Function'] == 'Raw Cropped to Eye', 'False', 'True')
-    cropped_info = cropped_info[["Image RID", "Cropped"]]
-    cropped_info.rename(columns={'Image RID': 'RID'}, inplace=True)
-
-# Upload results
     # upload cropping bounding box
     EA.upload_assets(f'./output/{configuration_records["execution"]}')
-    # upload cropping metadata
+
+    # ML result analysis
+    cropped_info = image_cropping_metadata("output/output.csv")
     EA.update_image_table(cropped_info)
 
 
