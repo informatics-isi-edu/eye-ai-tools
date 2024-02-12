@@ -183,19 +183,6 @@ class EyeAI(DerivaML):
 
         return result.to_dict(orient='records')
 
-    # def update_image_table(self, df: pd.DataFrame):
-    #     """
-    #     Batch update Cropped info (True/ False) into the Image table.
-
-    #     Args:
-    #     - df (pd.DataFrame): A dataframe of new Cropped info to be inserted. It contains two columns: RID,
-    #       and Cropped('True'/'False')
-    #     """
-    #     cropped_map = {e["Name"]: e["RID"] for e in self.schema.Cropped.entities()}
-    #     df.replace({"Cropped": cropped_map}, inplace=True)
-    #     EyeAI._batch_update(self.schema.Image, df.to_dict(orient='records'), [self.schema.Image.Cropped])
-
-
     def insert_new_diagnosis(self, entities: List[dict[str, dict]],
                              diagTag_rid: str,
                              process_rid: str):
