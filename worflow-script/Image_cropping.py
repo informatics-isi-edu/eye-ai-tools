@@ -39,8 +39,8 @@ def main(hostname: str, catalog_id:str, configuration_rid: str):
             './output/',
             './'+configuration_records['model_paths'][0],
             configuration_records['execution'],
-            configuration_records['annotation_tag_rid'],
-            EA.configuration.annotation_tag.name,
+            configuration_records['Annotation_Tag'][0]["RID"],
+            configuration_records['Annotation_Tag'][0]["name"],
             False
             )
     # upload cropping bounding box

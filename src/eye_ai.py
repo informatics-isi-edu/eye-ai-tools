@@ -4,6 +4,7 @@ import pandas as pd
 from pathlib import Path
 from PIL import Image
 from deriva_ml.deriva_ml_base import DerivaML, DerivaMLException
+import re
 
 
 class EyeAIException(DerivaMLException):
@@ -182,17 +183,18 @@ class EyeAI(DerivaML):
 
         return result.to_dict(orient='records')
 
-    def update_image_table(self, df: pd.DataFrame):
-        """
-        Batch update Cropped info (True/ False) into the Image table.
+    # def update_image_table(self, df: pd.DataFrame):
+    #     """
+    #     Batch update Cropped info (True/ False) into the Image table.
 
-        Args:
-        - df (pd.DataFrame): A dataframe of new Cropped info to be inserted. It contains two columns: RID,
-          and Cropped('True'/'False')
-        """
-        cropped_map = {e["Name"]: e["RID"] for e in self.schema.Cropped.entities()}
-        df.replace({"Cropped": cropped_map}, inplace=True)
-        EyeAI._batch_update(self.schema.Image, df.to_dict(orient='records'), [self.schema.Image.Cropped])
+    #     Args:
+    #     - df (pd.DataFrame): A dataframe of new Cropped info to be inserted. It contains two columns: RID,
+    #       and Cropped('True'/'False')
+    #     """
+    #     cropped_map = {e["Name"]: e["RID"] for e in self.schema.Cropped.entities()}
+    #     df.replace({"Cropped": cropped_map}, inplace=True)
+    #     EyeAI._batch_update(self.schema.Image, df.to_dict(orient='records'), [self.schema.Image.Cropped])
+
 
     def insert_new_diagnosis(self, entities: List[dict[str, dict]],
                              diagTag_rid: str,
@@ -207,7 +209,25 @@ class EyeAI(DerivaML):
         """
         self._batch_insert(self.schema.Diagnosis,
                            [{'Process': process_rid, 'Diagnosis_Tag': diagTag_rid, **e} for e in entities])
-        
+    
+    def insert_image_annotation(self, upload_result: str, metadata: pd.DataFrame):
+        image_annot_entities = []
+        for annotation in upload_result.values():
+            if annotation["State"] == 0 and annotation["Result"] is not None:
+                rid = annotation["Result"].get("RID")
+                if rid is not None:
+                    filename = annotation["Result"].get("Filename")
+                    cur = metadata[metadata['Saved SVG Name'] == filename]
+                    image_rid = cur['Image RID'].iloc[0]
+                    annot_func = cur['Worked Image Cropping Function'].iloc[0]
+                    annot_func_rid = self.lookup_term(table_name="Annotation_Function", term_name=annot_func)
+                    annot_type_rid = self.lookup_term(table_name="Annotation_Type", term_name="Optic Nerve")
+                    image_annot_entities.append({'Annotation_Function': annot_func_rid,
+                                                 'Annotation_Type':annot_type_rid,
+                                                 'Image': image_rid,
+                                                 'Execution_Assets':rid})
+        self._batch_insert(self.schema.Image_Annotation, image_annot_entities)
+
     def get_bounding_box(self, svg_path: str) -> tuple:
         tree = ET.parse(svg_path)
         root = tree.getroot()
