@@ -45,7 +45,7 @@ class EyeAI(DerivaML):
        entities into a table.
     """
 
-    def __init__(self, hostname: str = 'www.eye-ai.org', catalog_id: str = 'eye-ai'):
+    def __init__(self, hostname: str = 'www.eye-ai.org', catalog_id: str = 'eye-ai', data_dir: str= './'):
         """
         Initializes the EyeAI object.
 
@@ -54,7 +54,7 @@ class EyeAI(DerivaML):
         - catalog_number (str): The catalog number or name.
         """
 
-        super().__init__(hostname, catalog_id, 'eye-ai')
+        super().__init__(hostname, catalog_id, 'eye-ai', data_dir)
 
     @staticmethod
     def _find_latest_observation(df: pd.DataFrame):
