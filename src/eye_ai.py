@@ -237,7 +237,6 @@ class EyeAI(DerivaML):
         width = int(rect.attrib['width'])
         height = int(rect.attrib['height'])
         bbox = (x_min, y_min, x_min + width, y_min + height)
-        print("Bounding Box:", bbox)
         return bbox
 
     def get_crop_image(self, bag_path: str, crop_to_eye: bool) -> tuple:
