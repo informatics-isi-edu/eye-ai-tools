@@ -4,7 +4,8 @@ import pandas as pd
 from pathlib import Path
 from PIL import Image
 from deriva_ml.deriva_ml_base import DerivaML, DerivaMLException
-import re
+from pathlib import Path, PurePath
+# import re
 
 
 class EyeAIException(DerivaMLException):
@@ -215,6 +216,18 @@ class EyeAI(DerivaML):
                                                  'Execution_Assets':rid})
         self._batch_insert(self.schema.Image_Annotation, image_annot_entities)
 
+    def filter_angle_2(self, bag_path: str) -> str:
+        # @title Data Preprocessing (Filtering Image.csv for just Field_2 Images)
+        # Selecting image of angle 2 (Field 2) -- Image angle vocab 2SK6;
+        # bag_path1 = configuration_records['bag_paths'][0]
+        Dataset_Path = PurePath(bag_path, 'data/Image.csv')
+        Dataset = pd.read_csv(Dataset_Path)
+        Dataset_Field_2 = Dataset[Dataset['Image_Angle_Vocab'] == "2SK6"]
+        angle2_csv_path = PurePath(bag_path, 'Field_2.csv')
+        Dataset_Field_2.to_csv(angle2_csv_path, index=False)
+        return angle2_csv_path
+
+
     def get_bounding_box(self, svg_path: str) -> tuple:
         tree = ET.parse(svg_path)
         root = tree.getroot()
@@ -227,26 +240,26 @@ class EyeAI(DerivaML):
         print("Bounding Box:", bbox)
         return bbox
 
-    def get_crop_image(self, bag_path: str) -> tuple:
+    def get_crop_image(self, bag_path: str, crop_to_eye: bool) -> tuple:
         svg_root_path = bag_path + '/data/assets/Image_Annotation/'
         image_root_path = bag_path + '/data/assets/Image/'
         cropped_path = Path(bag_path + "/data/assets/Image_cropped")
         cropped_path.mkdir(parents=True, exist_ok=True)
         image_annot_df = pd.read_csv(bag_path+'/data/Image_Annotation.csv')
-        image_df = pd.read_csv(bag_path+'/data/Image.csv')
+        image_df = pd.read_csv(bag_path + '/data/Image.csv')
+        raw_crop = self.lookup_term(table_name="Annotation_Function", term_name='Raw_Cropped_to_Eye')
 
         for index, row in image_annot_df.iterrows():
-            image_rid = row['Image']
-            svg_path = svg_root_path + row['Filename']
-            bbox = self.get_bounding_box(svg_path)
-            # crop image save with nice name
-            image_file_name = image_df[image_df['RID'] == image_rid]['Filename'].values[0]
-            image_file_path = image_root_path + image_file_name
-            print(image_file_path)
-            image = Image.open(image_file_path)
-            cropped_image = image.crop(bbox)
-            cropped_image.save(str(cropped_path) + '/Cropped_' + image_file_name)
-            image_df["Cropped Filename"] = 'Cropped_' + image_file_name
+            if row['Annotation_Function'] != raw_crop or crop_to_eye:
+                image_rid = row['Image']
+                svg_path = svg_root_path + row['Filename']
+                bbox = self.get_bounding_box(svg_path)
+                image_file_name = image_df[image_df['RID'] == image_rid]['Filename'].values[0]
+                image_file_path = image_root_path + image_file_name
+                image = Image.open(image_file_path)
+                cropped_image = image.crop(bbox)
+                cropped_image.save(str(cropped_path) + '/Cropped_' + image_file_name)
+                image_df["Cropped Filename"] = 'Cropped_' + image_file_name
         output_csv = bag_path + "/data/Cropped_Image.csv"
         image_df.to_csv(output_csv)
         return cropped_path, output_csv 
