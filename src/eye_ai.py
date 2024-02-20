@@ -258,7 +258,7 @@ class EyeAI(DerivaML):
                 image = Image.open(image_file_path)
                 cropped_image = image.crop(bbox)
                 cropped_image.save(str(cropped_path) + '/Cropped_' + image_file_name)
-                image_df["Cropped Filename"] = 'Cropped_' + image_file_name
+                image_annot_df["Cropped Filename"] = 'Cropped_' + image_file_name
         output_csv = bag_path + "/data/Cropped_Image.csv"
-        image_df.to_csv(output_csv)
+        image_annot_df.to_csv(output_csv)
         return cropped_path, output_csv 
