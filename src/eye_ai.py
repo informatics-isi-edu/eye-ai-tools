@@ -252,7 +252,7 @@ class EyeAI(DerivaML):
         for index, row in image_annot_df.iterrows():
             if row['Annotation_Function'] != raw_crop or crop_to_eye:
                 image_rid = row['Image']
-                svg_path = svg_root_path + row['Filename']
+                svg_path = svg_root_path + f'Cropped_{image_rid}.svg'
                 bbox = self.get_bounding_box(svg_path)
                 image_file_name = image_df[image_df['RID'] == image_rid]['Filename'].values[0]
                 image_file_path = image_root_path + image_file_name
