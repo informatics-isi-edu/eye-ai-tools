@@ -239,7 +239,7 @@ class EyeAI(DerivaML):
         bbox = (x_min, y_min, x_min + width, y_min + height)
         return bbox
 
-    def get_crop_image(self, bag_path: str, crop_to_eye: bool) -> tuple:
+    def get_cropped_images(self, bag_path: str, crop_to_eye: bool) -> tuple:
         svg_root_path = bag_path + '/data/assets/Image_Annotation/'
         image_root_path = bag_path + '/data/assets/Image/'
         cropped_path = Path(bag_path + "/data/assets/Image_cropped")
