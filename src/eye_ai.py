@@ -5,8 +5,8 @@ from pathlib import Path
 from PIL import Image
 from deriva_ml.deriva_ml_base import DerivaML, DerivaMLException
 from pathlib import Path, PurePath
-# import re
-
+import matplotlib.pyplot as plt
+from sklearn.metrics import classification_report, roc_auc_score, roc_curve
 
 class EyeAIException(DerivaMLException):
     def __init__(self, msg=""):
@@ -306,3 +306,26 @@ class EyeAI(DerivaML):
         output_csv = bag_path + "/data/Cropped_Image.csv"
         image_annot_df.to_csv(output_csv)
         return cropped_path, output_csv 
+
+    def plot_roc(self, data: pd.DataFrame, image_path: Path) -> Path:
+        """
+        Plot Receiver Operating Characteristic (ROC) curve based on prediction results.
+
+        Parameters: data (pd.DataFrame): DataFrame containing prediction results with columns 'True Label' and
+        'Probability Score'. image_path (Path): Path to save the ROC curve image.
+
+        Returns:
+            Path: Path to the saved ROC curve image.
+
+        """
+        pred_result = pd.read_csv(data)
+        y_true = pred_result['True Label']
+        scores = pred_result['Probability Score']
+        fpr, tpr, thresholds = roc_curve(y_true, scores)
+        plt.plot(fpr, tpr)
+        plt.xlabel('False Positive Rate')
+        plt.ylabel('True Positive Rate')
+        plt.title('ROC Curve')
+        plt.savefig(image_path)
+
+        return image_path
