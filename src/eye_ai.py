@@ -199,6 +199,16 @@ class EyeAI(DerivaML):
                            [{'Process': process_rid, 'Diagnosis_Tag': diagTag_rid, **e} for e in entities])
     
     def insert_image_annotation(self, upload_result: str, metadata: pd.DataFrame):
+        """
+        Inserts image annotations into the catalog Image_Annotation table based on upload results and metadata.
+
+        Parameters:
+        - upload_result (str): The result of the image upload process.
+        - metadata (pd.DataFrame): DataFrame containing metadata information.
+
+        Returns:
+        - None
+        """
         image_annot_entities = []
         for annotation in upload_result.values():
             if annotation["State"] == 0 and annotation["Result"] is not None:
@@ -217,9 +227,15 @@ class EyeAI(DerivaML):
         self._batch_insert(self.schema.Image_Annotation, image_annot_entities)
 
     def filter_angle_2(self, bag_path: str) -> str:
-        # @title Data Preprocessing (Filtering Image.csv for just Field_2 Images)
-        # Selecting image of angle 2 (Field 2) -- Image angle vocab 2SK6;
-        # bag_path1 = configuration_records['bag_paths'][0]
+        """
+        Filters images for just Field_2 and saves the filtered data to a CSV file.
+
+        Parameters:
+        - bag_path (str): Path to the bag directory.
+
+        Returns:
+        - str: Path to the generated CSV file containing filtered images.
+        """
         Dataset_Path = PurePath(bag_path, 'data/Image.csv')
         Dataset = pd.read_csv(Dataset_Path)
         Dataset_Field_2 = Dataset[Dataset['Image_Angle_Vocab'] == "2SK6"]
@@ -229,6 +245,15 @@ class EyeAI(DerivaML):
 
 
     def get_bounding_box(self, svg_path: str) -> tuple:
+        """
+        Retrieves the bounding box coordinates from an SVG file.
+
+        Parameters:
+        - svg_path (str): Path to the SVG file.
+
+        Returns:
+        - tuple: A tuple containing the bounding box coordinates (x_min, y_min, x_max, y_max).
+        """
         tree = ET.parse(svg_path)
         root = tree.getroot()
         rect = root.find(".//{http://www.w3.org/2000/svg}rect")
@@ -240,6 +265,16 @@ class EyeAI(DerivaML):
         return bbox
 
     def get_cropped_images(self, bag_path: str, crop_to_eye: bool) -> tuple:
+        """
+        Retrieves cropped images and saves them to the specified directory.
+
+        Parameters:
+        - bag_path (str): Path to the bag directory.
+        - crop_to_eye (bool): Flag indicating whether to crop images to the eye.
+
+        Returns:
+        - tuple: A tuple containing the path to the directory containing cropped images and the path to the output CSV file.
+        """
         svg_root_path = bag_path + '/data/assets/Image_Annotation/'
         image_root_path = bag_path + '/data/assets/Image/'
         cropped_path = Path(bag_path + "/data/assets/Image_cropped")
