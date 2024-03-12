@@ -278,7 +278,10 @@ class EyeAI(DerivaML):
         svg_root_path = bag_path + '/data/assets/Image_Annotation/'
         image_root_path = bag_path + '/data/assets/Image/'
         cropped_path = Path(bag_path + "/data/assets/Image_cropped")
-        cropped_path.mkdir(parents=True, exist_ok=True)
+        cropped_path_2SKC = Path(bag_path + "/data/assets/Image_cropped/2SKC/")
+        cropped_path_2SKC.mkdir(parents=True, exist_ok=True)
+        cropped_path_2SKA = Path(bag_path + "/data/assets/Image_cropped/2SKA/")
+        cropped_path_2SKA.mkdir(parents=True, exist_ok=True)
         image_annot_df = pd.read_csv(bag_path+'/data/Image_Annotation.csv')
         image_df = pd.read_csv(bag_path + '/data/Image.csv')
         diagnosis = pd.read_csv(bag_path + '/data/Diagnosis.csv')
@@ -294,9 +297,8 @@ class EyeAI(DerivaML):
                 image = Image.open(image_file_path)
                 cropped_image = image.crop(bbox)
                 diag = diagnosis[(diagnosis['Diagnosis_Tag'] == 'C1T4')
-                                 & (diagnosis['RID'] == image_rid)]['Diagnosis_Vocab'].iloc[0]
+                                 & (diagnosis['Image'] == image_rid)]['Diagnosis_Vocab'].iloc[0]
                 cropped_image.save(f'{str(cropped_path)}/{diag}/Cropped_{image_file_name}')
-                # cropped_image.save(str(cropped_path) + '/Cropped_' + image_file_name)
                 image_annot_df["Cropped Filename"] = 'Cropped_' + image_file_name
         output_csv = bag_path + "/data/Cropped_Image.csv"
         image_annot_df.to_csv(output_csv)
