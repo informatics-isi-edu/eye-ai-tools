@@ -266,7 +266,7 @@ class EyeAI(DerivaML):
 
     def get_cropped_images(self, bag_path: str, crop_to_eye: bool) -> tuple:
         """
-        Retrieves cropped images and saves them to the specified directory.
+        Retrieves cropped images and saves them to the specified directory and seperated in two folders by class.
 
         Parameters:
         - bag_path (str): Path to the bag directory.
@@ -281,6 +281,7 @@ class EyeAI(DerivaML):
         cropped_path.mkdir(parents=True, exist_ok=True)
         image_annot_df = pd.read_csv(bag_path+'/data/Image_Annotation.csv')
         image_df = pd.read_csv(bag_path + '/data/Image.csv')
+        diagnosis = pd.read_csv(bag_path + '/data/Diagnosis.csv')
         raw_crop = self.lookup_term(table_name="Annotation_Function", term_name='Raw_Cropped_to_Eye')
 
         for index, row in image_annot_df.iterrows():
@@ -292,7 +293,10 @@ class EyeAI(DerivaML):
                 image_file_path = image_root_path + image_file_name
                 image = Image.open(image_file_path)
                 cropped_image = image.crop(bbox)
-                cropped_image.save(str(cropped_path) + '/Cropped_' + image_file_name)
+                diag = diagnosis[(diagnosis['Diagnosis_Tag'] == 'C1T4') &
+                                 (diagnosis['RID'] == image_rid)].loc[0, 'Diagnosis_Vocab']
+                cropped_image.save(f'{str(cropped_path)}/{diag}/Cropped_{image_file_name}')
+                # cropped_image.save(str(cropped_path) + '/Cropped_' + image_file_name)
                 image_annot_df["Cropped Filename"] = 'Cropped_' + image_file_name
         output_csv = bag_path + "/data/Cropped_Image.csv"
         image_annot_df.to_csv(output_csv)
