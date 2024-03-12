@@ -293,8 +293,8 @@ class EyeAI(DerivaML):
                 image_file_path = image_root_path + image_file_name
                 image = Image.open(image_file_path)
                 cropped_image = image.crop(bbox)
-                diag = diagnosis[(diagnosis['Diagnosis_Tag'] == 'C1T4') &
-                                 (diagnosis['RID'] == image_rid)].loc[0, 'Diagnosis_Vocab']
+                diag = diagnosis[(diagnosis['Diagnosis_Tag'] == 'C1T4')
+                                 & (diagnosis['RID'] == image_rid)]['Diagnosis_Vocab'].iloc[0]
                 cropped_image.save(f'{str(cropped_path)}/{diag}/Cropped_{image_file_name}')
                 # cropped_image.save(str(cropped_path) + '/Cropped_' + image_file_name)
                 image_annot_df["Cropped Filename"] = 'Cropped_' + image_file_name
