@@ -307,25 +307,30 @@ class EyeAI(DerivaML):
         image_annot_df.to_csv(output_csv)
         return cropped_path, output_csv 
 
-    def plot_roc(self, data: pd.DataFrame, image_path: Path) -> Path:
+    def plot_roc(self, data: pd.DataFrame) -> Path:
         """
-        Plot Receiver Operating Characteristic (ROC) curve based on prediction results.
+        Plot Receiver Operating Characteristic (ROC) curve based on prediction results. Save the plot values into a csv file.
 
-        Parameters: data (pd.DataFrame): DataFrame containing prediction results with columns 'True Label' and
-        'Probability Score'. image_path (Path): Path to save the ROC curve image.
-
+        Parameters:
+        - data (pd.DataFrame): DataFrame containing prediction results with columns 'True Label' and
+        'Probability Score'.
         Returns:
-            Path: Path to the saved ROC curve image.
+            Path: Path to the saved csv file of ROC plot values .
 
         """
         pred_result = pd.read_csv(data)
         y_true = pred_result['True Label']
         scores = pred_result['Probability Score']
         fpr, tpr, thresholds = roc_curve(y_true, scores)
+        roc_df = pd.DataFrame({'False Positive Rate': fpr, 'True Positive Rate': tpr})
+        output_path = self.execution_assets_path/Path("ROC")
+        roc_csv_path = output_path / Path("roc_plot.csv")
+        roc_df.to_csv(roc_csv_path, index=False)
+        # show plot in notebook
         plt.plot(fpr, tpr)
         plt.xlabel('False Positive Rate')
         plt.ylabel('True Positive Rate')
         plt.title('ROC Curve')
-        plt.savefig(image_path)
+        plt.show()
 
-        return image_path
+        return roc_csv_path
