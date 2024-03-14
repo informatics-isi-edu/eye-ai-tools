@@ -318,13 +318,13 @@ class EyeAI(DerivaML):
             Path: Path to the saved csv file of ROC plot values .
 
         """
+        output_path = self.execution_assets_path/Path("ROC")
+        output_path.mkdir(parents=True, exist_ok=True)
         pred_result = pd.read_csv(data)
         y_true = pred_result['True Label']
         scores = pred_result['Probability Score']
         fpr, tpr, thresholds = roc_curve(y_true, scores)
         roc_df = pd.DataFrame({'False Positive Rate': fpr, 'True Positive Rate': tpr})
-        output_path = self.execution_assets_path/Path("ROC")
-        output_path.mkdir(parents=True, exist_ok=True)
         roc_csv_path = output_path / Path("roc_plot.csv")
         roc_df.to_csv(roc_csv_path, index=False)
         # show plot in notebook
