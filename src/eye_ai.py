@@ -80,7 +80,7 @@ class EyeAI(DerivaML):
                 df.drop(index, inplace=True)
         return df
 
-    def image_tall(self, dataset_rid: str, diagnosis_tag_rid: str):
+    def image_tall(self, dataset_rid: str, diagnosis_tag_rid: str) -> pd.DataFrame:
         """
         Retrieve tall-format image data based on provided dataset and diagnosis tag filters.
 
@@ -264,7 +264,7 @@ class EyeAI(DerivaML):
         bbox = (x_min, y_min, x_min + width, y_min + height)
         return bbox
 
-    def get_cropped_images(self, bag_path: str, crop_to_eye: bool) -> tuple:
+    def get_cropped_images(self, bag_path: str, output_dir: str, crop_to_eye: bool) -> tuple:
         """
         Retrieves cropped images and saves them to the specified directory and seperated in two folders by class.
 
@@ -277,10 +277,10 @@ class EyeAI(DerivaML):
         """
         svg_root_path = bag_path + '/data/assets/Image_Annotation/'
         image_root_path = bag_path + '/data/assets/Image/'
-        cropped_path = Path(bag_path + "/data/assets/Image_cropped")
-        cropped_path_2SKC = Path(bag_path + "/data/assets/Image_cropped/2SKC_No_Glaucoma/")
+        cropped_path = Path(output_dir + "/Image_cropped")
+        cropped_path_2SKC = Path(output_dir + "/Image_cropped/2SKC_No_Glaucoma/")
         cropped_path_2SKC.mkdir(parents=True, exist_ok=True)
-        cropped_path_2SKA = Path(bag_path + "/data/assets/Image_cropped/2SKA_Suspected_Glaucoma/")
+        cropped_path_2SKA = Path(output_dir + "/Image_cropped/2SKA_Suspected_Glaucoma/")
         cropped_path_2SKA.mkdir(parents=True, exist_ok=True)
         image_annot_df = pd.read_csv(bag_path+'/data/Image_Annotation.csv')
         image_df = pd.read_csv(bag_path + '/data/Image.csv')
