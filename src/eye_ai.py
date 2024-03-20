@@ -275,13 +275,13 @@ class EyeAI(DerivaML):
         Returns:
         - tuple: A tuple containing the path to the directory containing cropped images and the path to the output CSV file.
         """
-        svg_root_path = bag_path + '/data/assets/Image_Annotation/'
-        image_root_path = bag_path + '/data/assets/Image/'
         cropped_path = Path(output_dir + "/Image_cropped")
         cropped_path_2SKC = Path(output_dir + "/Image_cropped/2SKC_No_Glaucoma/")
         cropped_path_2SKC.mkdir(parents=True, exist_ok=True)
         cropped_path_2SKA = Path(output_dir + "/Image_cropped/2SKA_Suspected_Glaucoma/")
         cropped_path_2SKA.mkdir(parents=True, exist_ok=True)
+        svg_root_path = bag_path + '/data/assets/Image_Annotation/'
+        image_root_path = bag_path + '/data/assets/Image/'
         image_annot_df = pd.read_csv(bag_path+'/data/Image_Annotation.csv')
         image_df = pd.read_csv(bag_path + '/data/Image.csv')
         diagnosis = pd.read_csv(bag_path + '/data/Diagnosis.csv')
