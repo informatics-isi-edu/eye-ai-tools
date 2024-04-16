@@ -150,6 +150,25 @@ class EyeAI(DerivaML):
             ['Subject_RID', 'Diagnosis_RID', 'Full_Name', 'Image', 'Image_Side', 'Diagnosis', 'Cup/Disk_Ratio',
              'Image_Quality']]
 
+    def reshape_table(self, frames: List[pd.DataFrame], compare_value: str):
+        """
+        Reshape a list of dataframes to long and wide format containing the pre-specified compare value.
+
+        Args:
+        - frames (List): A list of dataframes with tall-format image data from fist observation of the subject
+        - compare_value (str): Column name of the compared value, choose from ["Diagnosis", "Image_Quality", "Cup/Disk_Ratio"]
+
+        Returns:
+        - pd.DataFrame: long and wide formatted dataframe with compare values from all graders and initial diagnosis.
+        """
+        long = pd.concat(frames).reset_index()
+        # change data type for control vocab table
+        cols = ['Image_Quality', 'Image_Side', 'Full_Name', 'Diagnosis']
+        for c in cols:
+            long[c] = long[c].astype('category')
+        wide = pd.pivot(long, index=['Image', 'Image_Side', 'Subject_RID'], columns='Full_Name',
+                        values=compare_value)  # Reshape from long to wide
+        return long, wide
     def compute_diagnosis(self,
                           df: pd.DataFrame,
                           diag_func: Callable,
