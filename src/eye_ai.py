@@ -46,7 +46,7 @@ class EyeAI(DerivaML):
        entities into a table.
     """
 
-    def __init__(self, hostname: str = 'www.eye-ai.org', catalog_id: str = 'eye-ai', data_dir: str= './'):
+    def __init__(self, hostname: str = 'www.eye-ai.org', catalog_id: str = 'eye-ai', data_dir: str = './'):
         """
         Initializes the EyeAI object.
 
@@ -56,6 +56,7 @@ class EyeAI(DerivaML):
         """
 
         super().__init__(hostname, catalog_id, 'eye-ai', data_dir)
+        self.schema = self.pb.schemas['eye-ai']
 
     @staticmethod
     def _find_latest_observation(df: pd.DataFrame):
@@ -217,7 +218,7 @@ class EyeAI(DerivaML):
         self._batch_insert(self.schema.Diagnosis,
                            [{'Process': process_rid, 'Diagnosis_Tag': diagTag_rid, **e} for e in entities])
     
-    def insert_image_annotation(self, upload_result: str, metadata: pd.DataFrame):
+    def insert_image_annotation(self, upload_result: dict, metadata: pd.DataFrame):
         """
         Inserts image annotations into the catalog Image_Annotation table based on upload results and metadata.
 
@@ -245,7 +246,7 @@ class EyeAI(DerivaML):
                                                  'Execution_Assets':rid})
         self._batch_insert(self.schema.Image_Annotation, image_annot_entities)
 
-    def filter_angle_2(self, bag_path: str) -> str:
+    def filter_angle_2(self, bag_path: str) -> PurePath:
         """
         Filters images for just Field_2 and saves the filtered data to a CSV file.
 
@@ -261,7 +262,6 @@ class EyeAI(DerivaML):
         angle2_csv_path = PurePath(bag_path, 'Field_2.csv')
         Dataset_Field_2.to_csv(angle2_csv_path, index=False)
         return angle2_csv_path
-
 
     def get_bounding_box(self, svg_path: str) -> tuple:
         """
