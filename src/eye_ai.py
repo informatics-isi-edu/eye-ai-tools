@@ -46,7 +46,8 @@ class EyeAI(DerivaML):
        entities into a table.
     """
 
-    def __init__(self, hostname: str = 'www.eye-ai.org', catalog_id: str = 'eye-ai', data_dir: str = './'):
+    def __init__(self, hostname: str = 'www.eye-ai.org', catalog_id: str = 'eye-ai',
+                 cache_dir: str='/data', working_dir: str='./'):
         """
         Initializes the EyeAI object.
 
@@ -55,7 +56,7 @@ class EyeAI(DerivaML):
         - catalog_number (str): The catalog number or name.
         """
 
-        super().__init__(hostname, catalog_id, 'eye-ai', data_dir)
+        super().__init__(hostname, catalog_id, 'eye-ai', cache_dir, working_dir)
         self.schema = self.pb.schemas['eye-ai']
 
     @staticmethod
